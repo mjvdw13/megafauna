@@ -83,6 +83,8 @@ export class Attack {
         this.grab = config.grab || false;
         // Throws: applied to the held opponent when the move becomes active. 'forward' | 'back' | 'up' | 'down'.
         this.throwDir = config.throwDir || null;
+        // Leaves a grounded opponent dizzy (stars, can't act) for this many frames instead of normal hitstun.
+        this.dizzy = config.dizzy || 0;
         Object.freeze(this);
     }
 

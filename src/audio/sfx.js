@@ -198,6 +198,31 @@ export const SFX = {
         [0, 4, 7].forEach((n, i) => v.tone({ type: 'square', freq: 660 * semitones(-n), dur: 0.1, gain: 0.07, delay: 0.1 + i * 0.08, filter: { type: 'lowpass', freq: 2500 } }));
     },
 
+    breath: (v) => {
+        // A long, gross "HAAAAAH": breathy noise through a mouth-shaped filter over a low groan
+        v.noise({ dur: 0.9, gain: 0.45, attack: 0.08, filter: { type: 'bandpass', points: [[0, 700], [0.3, 1100], [0.9, 450]], Q: 1.6 } });
+        v.noise({ dur: 0.8, gain: 0.2, attack: 0.1, filter: { type: 'lowpass', freq: 500 } });
+        v.tone({ type: 'sawtooth', points: [[0, 110], [0.3, 125], [0.85, 85]], dur: 0.85, gain: 0.12, attack: 0.08, filter: { type: 'lowpass', freq: 600 } });
+        // ...and a fly buzzing off
+        v.tone({ type: 'sawtooth', freq: 220, dur: 0.4, gain: 0.04, delay: 0.5, vibrato: { rate: 40, depth: 30 }, filter: { type: 'bandpass', freq: 900, Q: 3 } });
+    },
+
+    chestpound: (v) => {
+        // Hollow thumps on a big chest, alternating hands
+        for (let i = 0; i < 6; i++) {
+            v.tone({ freq: i % 2 ? 105 : 130, to: 60, dur: 0.16, gain: 0.8, delay: i * 0.09 });
+            v.noise({ dur: 0.04, gain: 0.15, delay: i * 0.09, filter: { type: 'lowpass', freq: 900 } });
+        }
+    },
+
+    secret: (v) => {
+        // Unlock jingle: a rising run and a sparkly held chord
+        [0, 4, 7, 12, 16, 19, 24].forEach((n, i) => v.tone({ type: 'square', freq: 330 * semitones(n), dur: 0.12, gain: 0.09, delay: i * 0.07, filter: { type: 'lowpass', freq: 3500 } }));
+        for (const n of [12, 16, 19, 24]) v.tone({ type: 'triangle', freq: 330 * semitones(n), dur: 1.4, gain: 0.08, attack: 0.02, delay: 0.5 });
+        for (let i = 0; i < 8; i++) v.tone({ freq: 2000 + Math.random() * 2000, dur: 0.08, gain: 0.04, delay: 0.5 + i * 0.09 });
+        v.tone({ freq: 90, to: 45, dur: 0.6, gain: 0.7, delay: 0.5 });
+    },
+
     // ------------------------------------------------------------- movement
 
     jump: (v) => {

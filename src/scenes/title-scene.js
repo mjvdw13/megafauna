@@ -4,7 +4,7 @@
 // ============================================================================
 import { CPU_LEVEL_IDS, CPU_LEVELS } from '../ai/cpu-controller.js';
 import { SCREEN } from '../config.js';
-import { ROSTER } from '../fighters/roster.js';
+import { availableRoster } from '../fighters/roster.js';
 import { Puppet } from '../graphics/puppet.js';
 import { Stage } from '../stages/stage.js';
 import { STAGES } from '../stages/index.js';
@@ -24,11 +24,13 @@ export class TitleScene {
         this.game = game;
         this.time = 0;
         this.backdrop = new Stage(STAGES[0]);
-        this.puppets = ROSTER.map((def, i) => new Puppet(def.rig, { seed: i + 7 }));
     }
 
     enter() {
         this.time = 0;
+        // Line up everyone who can be picked (a secret character joins once unlocked).
+        this.roster = availableRoster();
+        this.puppets = this.roster.map((def, i) => new Puppet(def.rig, { seed: i + 7 }));
         this.index = this.game.session.mode === 'versus' ? 1 : 0;
         this.game.audio.music.play('title');
     }
@@ -73,11 +75,11 @@ export class TitleScene {
 
         // The roster lined up along the bottom
         const slot = 260;
-        const startX = width / 2 - (ROSTER.length * slot) / 2;
-        ROSTER.forEach((def, i) => {
+        const startX = width / 2 - (this.roster.length * slot) / 2;
+        this.roster.forEach((def, i) => {
             const puppet = this.puppets[i];
             puppet.render();
-            puppet.drawAt(ctx, startX + i * slot + slot / 2, 580, { flip: i >= ROSTER.length / 2 });
+            puppet.drawAt(ctx, startX + i * slot + slot / 2, 580, { flip: i >= this.roster.length / 2 });
             drawText(ctx, def.name, startX + i * slot + slot / 2, 620, { size: 26, font: DISPLAY_FONT, weight: 'normal', color: def.color, outline: '#2a1d17', outlineWidth: 5 });
         });
 

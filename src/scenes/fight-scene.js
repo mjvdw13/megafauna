@@ -230,6 +230,7 @@ export class FightScene {
             this.audio.play('knockdown', { x });
         }
         if (hit.thrown) this.audio.play('whoosh', { x, strength: 'heavy' });
+        if (hit.dizzy) this.effects.add(new Callout(defender.centerX, defender.y - 30, 'P-U!', { color: '#9ccc4a', size: 30 }));
     }
 
     onFighterEvent(fighter, event) {

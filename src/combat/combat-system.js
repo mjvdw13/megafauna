@@ -104,7 +104,10 @@ export function applyHit({ attack, attacker, defender, impact, sourceX, damageSc
     defender.comboHitCount = comboHit;
     if (defender.holding) releaseGrab(defender);
     defender.cancelAttack();
-    if (attack.knockdown) sm.setState(S.KNOCKDOWN);
+    if (attack.dizzy && defender.isGrounded) {
+        sm.setState(S.DIZZY, { duration: attack.dizzy });
+        event.dizzy = true;
+    } else if (attack.knockdown) sm.setState(S.KNOCKDOWN);
     else sm.setState(S.HITSTUN, { stunFrames: attack.hitstun });
     defender.velocityX = attack.knockback * KNOCKBACK_SCALE * knockbackScale * direction / defender.weight;
     defender.velocityY = -attack.launch * (attack.launch > 0 ? knockbackScale : 1);

@@ -98,6 +98,7 @@ Everything is drawn in code in a hand-drawn cartoon style. Nothing is a bitmap.
    - A test checks that every required pose exists and that every pose a move names exists.
 2. Create `src/fighters/<id>/<id>.js` exporting the definition with `rig: <yourRig>`. The fields are commented in the existing ones.
 3. Add it to `ROSTER` in `src/fighters/roster.js`.
+   - Add `secret: true` to the definition to hide the character until it's unlocked. The unlock code lives in `SECRET` in `src/scenes/character-select-scene.js`, and unlocks are remembered by the browser (`src/core/unlocks.js`).
 4. Run `npm test`. Tests check that the character defines every move slot with its own move names, can recover (an up special that rises), and doesn't share a value with anyone for any displayed stat.
 
 ### Stats

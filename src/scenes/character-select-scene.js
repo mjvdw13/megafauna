@@ -2,9 +2,11 @@
 // CHARACTER SELECT SCENE
 // Versus: each player moves their own cursor. Vs CPU: player 1 picks their
 // fighter, then picks the CPU's.
+// Secret: press up five times to unlock Dad.
 // ============================================================================
 import { SCREEN } from '../config.js';
-import { ROSTER } from '../fighters/roster.js';
+import { SecretCode, unlock } from '../core/unlocks.js';
+import { availableRoster } from '../fighters/roster.js';
 import { INK_COLOR as INK } from '../graphics/ink.js';
 import { Puppet } from '../graphics/puppet.js';
 import { characterBadges, renderStatBars } from '../ui/stat-bars.js';
@@ -13,16 +15,20 @@ import { drawText, drawWrappedText, DISPLAY_FONT } from '../ui/text.js';
 
 const PANEL = { width: 470, height: 470, y: 92 };
 const PLAYER_COLORS = { 1: '#2f80c9', 2: '#d6452f' };
+const SECRET = Object.freeze({ id: 'dad', code: ['up', 'up', 'up', 'up', 'up'] });
+const REVEAL_FRAMES = 170;
 
 class PlayerCursor {
-    constructor(playerNumber, index) {
+    /** @param scene  the select scene; its `roster` is the list being browsed */
+    constructor(scene, playerNumber, index) {
+        this.scene = scene;
         this.playerNumber = playerNumber;
         this.index = index;
         this.ready = false;
         this.refreshPuppet();
     }
 
-    get def() { return ROSTER[this.index]; }
+    get def() { return this.scene.roster[this.index]; }
 
     refreshPuppet() {
         this.puppet = new Puppet(this.def.rig, { seed: this.playerNumber * 13 });
@@ -30,7 +36,8 @@ class PlayerCursor {
     }
 
     move(delta) {
-        this.index = (this.index + delta + ROSTER.length) % ROSTER.length;
+        const count = this.scene.roster.length;
+        this.index = (this.index + delta + count) % count;
         this.refreshPuppet();
     }
 
@@ -44,21 +51,50 @@ export class CharacterSelectScene {
     constructor(game) {
         this.game = game;
         this.time = 0;
-        this.rosterPuppets = ROSTER.map((def, i) => new Puppet(def.rig, { seed: 40 + i }));
+        this.reveal = 0;
     }
 
     enter() {
         const { session } = this.game;
         this.vsCpu = session.mode === 'cpu';
         this.game.audio.music.play('title');
-        const indexOf = (id, fallback) => {
-            const i = ROSTER.findIndex((c) => c.id === id);
-            return i >= 0 ? i : fallback;
-        };
+        this.loadRoster();
         this.cursors = [
-            new PlayerCursor(1, indexOf(session.p1, 0)),
-            new PlayerCursor(2, indexOf(session.p2, 1 % ROSTER.length))
+            new PlayerCursor(this, 1, this.indexOf(session.p1, 0)),
+            new PlayerCursor(this, 2, this.indexOf(session.p2, 1 % this.roster.length))
         ];
+        this.codes = [new SecretCode(SECRET.code), new SecretCode(SECRET.code)];
+        this.reveal = 0;
+    }
+
+    loadRoster() {
+        this.roster = availableRoster();
+        this.rosterPuppets = this.roster.map((def, i) => new Puppet(def.rig, { seed: 40 + i }));
+    }
+
+    indexOf(id, fallback) {
+        const i = this.roster.findIndex((c) => c.id === id);
+        return i >= 0 ? i : fallback;
+    }
+
+    /** The secret code was entered: unlock the secret character (if needed) and jump that player's cursor to them. */
+    revealSecret(cursor) {
+        const { audio } = this.game;
+        const ids = this.cursors.map((c) => c.def.id);
+        const isNew = unlock(SECRET.id);
+        this.loadRoster();
+        this.cursors.forEach((c, i) => { c.index = this.indexOf(ids[i], 0); });
+        if (!cursor.ready) {
+            cursor.index = this.indexOf(SECRET.id, cursor.index);
+            cursor.refreshPuppet();
+        }
+        if (isNew) {
+            this.reveal = REVEAL_FRAMES;
+            audio.play('secret');
+            audio.announce('Here comes Dad!', { pitch: 0.6, rate: 0.9 });
+        } else {
+            audio.play('ready');
+        }
     }
 
     /** The cursor player 1 is steering in vs-CPU mode: their own, then the CPU's once theirs is locked in. */
@@ -68,6 +104,10 @@ export class CharacterSelectScene {
         this.time++;
         for (const p of this.rosterPuppets) p.update();
         const { input, audio } = this.game;
+        if (this.reveal > 0) this.reveal--;
+        // Secret code: in vs-CPU mode player 1 enters it for whichever cursor they're steering.
+        if (this.codes[0].feed(input.player1)) this.revealSecret(this.vsCpu ? this.activeCpuModeCursor : this.cursors[0]);
+        if (!this.vsCpu && this.codes[1].feed(input.player2)) this.revealSecret(this.cursors[1]);
         // Cancel with nobody ready goes back to the title (checked before this frame's cancel un-readies anyone).
         const nobodyReady = this.cursors.every((c) => !c.ready);
         if (this.vsCpu) {
@@ -131,6 +171,7 @@ export class CharacterSelectScene {
         this.renderPanel(ctx, this.cursors[1], width - 50 - PANEL.width);
         drawText(ctx, 'VS', width / 2, 350, { size: 92, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: INK, outlineWidth: 9 });
         this.renderRosterStrip(ctx);
+        if (this.reveal > 0) this.renderReveal(ctx);
         const help = this.vsCpu ? 'A/D choose · J confirm · K cancel · ESC back' : 'A/D or ←/→ choose · J / Num1 confirm · K / Num2 cancel · ESC back';
         drawText(ctx, help, width / 2, 708, { size: 18, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
     }
@@ -182,9 +223,9 @@ export class CharacterSelectScene {
 
     renderRosterStrip(ctx) {
         const size = 82, gap = 18;
-        const total = ROSTER.length * size + (ROSTER.length - 1) * gap;
+        const total = this.roster.length * size + (this.roster.length - 1) * gap;
         const startX = SCREEN.width / 2 - total / 2, y = 590;
-        ROSTER.forEach((def, i) => {
+        this.roster.forEach((def, i) => {
             const x = startX + i * (size + gap);
             inkPanel(ctx, x, y, size, size, { fill: def.color, radius: 14, lineWidth: 3 });
             ctx.save();
@@ -202,5 +243,30 @@ export class CharacterSelectScene {
                 ctx.stroke(inkRectPath(x + inset, y + inset, size - inset * 2, size - inset * 2, 16));
             });
         });
+    }
+
+    /** "SECRET CHARACTER UNLOCKED!" banner that pops in over the middle of the screen. */
+    renderReveal(ctx) {
+        const { width } = SCREEN;
+        const age = REVEAL_FRAMES - this.reveal;
+        const fade = Math.min(1, this.reveal / 20);
+        const pop = 1 + Math.max(0, 0.6 - age / 12);
+        ctx.save();
+        ctx.globalAlpha = fade;
+        // Spinning light rays
+        ctx.translate(width / 2, 330);
+        ctx.save();
+        ctx.rotate(age * 0.02);
+        ctx.fillStyle = 'rgba(255,240,170,0.35)';
+        for (let i = 0; i < 12; i++) {
+            ctx.rotate(Math.PI / 6);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-40, -420); ctx.lineTo(40, -420); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+        ctx.scale(pop, pop);
+        inkPanel(ctx, -330, -70, 660, 140, { fill: '#2a1d17', radius: 20, lineWidth: 4 });
+        drawText(ctx, 'SECRET CHARACTER UNLOCKED!', 0, -12, { size: 46, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: INK, outlineWidth: 7 });
+        drawText(ctx, 'DAD JOINS THE BRAWL!', 0, 44, { size: 40, font: DISPLAY_FONT, weight: 'normal', color: '#4aa3df', outline: INK, outlineWidth: 6 });
+        ctx.restore();
     }
 }
