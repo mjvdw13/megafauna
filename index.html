@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MegaFauna - Browser Fighting Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            border: 4px solid #e94560;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+        }
+        #game-canvas {
+            display: block;
+            background-color: #16213e;
+        }
+        @media (max-width: 1300px) { #game-container { transform: scale(0.9); } }
+        @media (max-width: 1150px) { #game-container { transform: scale(0.75); } }
+        @media (max-width: 960px) { #game-container { transform: scale(0.6); } }
+        @media (max-width: 768px) { #game-container { transform: scale(0.5); } }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="1280" height="720"></canvas>
+    </div>
+
+    <!-- Constants (no dependencies) -->
+    <script src="js/constants.js"></script>
+
+    <!-- Graphics (depends on: nothing) -->
+    <script src="js/graphics/pixel-art.js"></script>
+    <script src="js/graphics/sprite-animator.js"></script>
+
+    <!-- Combat (depends on: constants) -->
+    <script src="js/combat/hitbox.js"></script>
+    <script src="js/combat/attack.js"></script>
+    <script src="js/combat/state-machine.js"></script>
+
+    <!-- Core systems (depends on: nothing) -->
+    <script src="js/core/input.js"></script>
+    <script src="js/core/physics.js"></script>
+
+    <!-- Characters (depends on: constants, combat, graphics) -->
+    <script src="js/characters/character.js"></script>
+    <script src="js/characters/riley.js"></script>
+    <script src="js/characters/quackers.js"></script>
+
+    <!-- Game (depends on: everything above) -->
+    <script src="js/game.js"></script>
+
+    <!-- Bootstrap (depends on: Game) -->
+    <script src="js/main.js"></script>
+</body>
+</html>
