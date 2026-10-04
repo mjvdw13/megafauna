@@ -1,0 +1,14 @@
+{
+  "name": "megafauna",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MegaFauna - a two-player browser fighting game",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
