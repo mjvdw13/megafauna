@@ -1,7 +1,8 @@
 // ============================================================================
 // EFFECTS
-// Short-lived visual effects drawn in world space: impact sparks, particles,
-// dust, comic callouts. Each effect has update() → alive? and render(ctx).
+// Short-lived visual effects drawn in screen space over the 3-D picture:
+// impact flashes, glowing particles, dust, comic callouts. Each effect has
+// update() → alive? and render(ctx).
 // ============================================================================
 import { clamp, easeOutBack, easeOutQuad, randRange } from '../core/math.js';
 import { INK_COLOR } from './ink.js';
@@ -37,7 +38,7 @@ export class Effect {
 export class ParticleBurst extends Effect {
     constructor(particles) {
         super(Math.max(...particles.map((p) => p.life)));
-        this.particles = particles.map((p) => ({ gravity: 0.2, drag: 0.94, shrink: 0.95, shape: 'blob', outline: INK_COLOR, rotation: 0, spin: 0, maxLife: p.life, ...p }));
+        this.particles = particles.map((p) => ({ gravity: 0.2, drag: 0.94, shrink: 0.95, shape: 'blob', outline: null, rotation: 0, spin: 0, maxLife: p.life, ...p }));
     }
 
     update() {
@@ -57,15 +58,20 @@ export class ParticleBurst extends Effect {
             ctx.fillStyle = p.color;
             ctx.strokeStyle = p.color;
             if (p.shape === 'circle' || p.shape === 'blob') {
+                // Soft-edged: bright core fading out, so particles read as light and dust, not ink.
+                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size / 2);
+                g.addColorStop(0, p.color);
+                g.addColorStop(0.55, p.color);
+                g.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); ctx.fill();
-                if (p.outline && p.size > 3) { ctx.lineWidth = 1.6; ctx.strokeStyle = p.outline; ctx.stroke(); }
             } else if (p.shape === 'line') {
                 ctx.lineWidth = Math.max(1, p.size / 3);
                 ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5); ctx.stroke();
             } else if (p.shape === 'feather') {
                 ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation);
                 ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size / 3, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = INK_COLOR; ctx.lineWidth = 1.4; ctx.stroke();
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
                 ctx.beginPath(); ctx.moveTo(-p.size, 0); ctx.lineTo(p.size, 0); ctx.stroke();
                 ctx.restore();
             } else {
@@ -91,48 +97,39 @@ export function burst(x, y, { count = 8, colors = ['#fff'], speed = [3, 8], size
 
 // ---------------------------------------------------------------------------- impacts
 
-/** Comic "POW" starburst: a jagged inked star that pops in, plus a shockwave ring. */
+/** Impact: a bright flash, light streaks flying out along the hit, and a shockwave ring. */
 export class HitSpark extends Effect {
-    constructor(x, y, { heavy = false, color = '#f1c40f' } = {}) {
-        super(heavy ? 18 : 12);
-        Object.assign(this, { x, y, heavy, color });
-        const points = heavy ? 14 : 10;
-        this.rotation = Math.random() * Math.PI;
-        this.radii = Array.from({ length: points * 2 }, (_, i) => (i % 2 === 0 ? randRange(0.85, 1.15) : randRange(0.42, 0.55)));
-    }
-
-    starPath(radius) {
-        const path = new Path2D();
-        this.radii.forEach((k, i) => {
-            const a = this.rotation + (i / this.radii.length) * Math.PI * 2;
-            const px = this.x + Math.cos(a) * radius * k, py = this.y + Math.sin(a) * radius * k;
-            if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
-        });
-        path.closePath();
-        return path;
+    constructor(x, y, { heavy = false, color = '#f1c40f', direction = 1 } = {}) {
+        super(heavy ? 16 : 11);
+        Object.assign(this, { x, y, heavy, color, direction });
+        this.streaks = Array.from({ length: heavy ? 9 : 6 }, () => ({ a: (direction > 0 ? 0 : Math.PI) + randRange(-1.1, 1.1), len: randRange(0.6, 1.2) }));
     }
 
     render(ctx) {
         const t = this.t;
-        const size = (this.heavy ? 62 : 40) * easeOutBack(Math.min(1, this.age / 4)) * (1 - t * 0.25);
-        ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-        ctx.lineJoin = 'round';
-        // Outer colored star, inner white star
-        const outer = this.starPath(size);
-        ctx.fillStyle = '#ffe14d';
-        ctx.fill(outer);
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = INK_COLOR;
-        ctx.stroke(outer);
-        ctx.fillStyle = this.color;
-        ctx.fill(this.starPath(size * 0.68));
-        ctx.fillStyle = '#ffffff';
-        ctx.fill(this.starPath(size * 0.38));
-        // Shockwave ring
-        ctx.globalAlpha = (1 - t) * 0.9;
-        ctx.strokeStyle = INK_COLOR;
-        ctx.lineWidth = (this.heavy ? 5 : 3.5) * (1 - t) + 1;
-        ctx.beginPath(); ctx.arc(this.x, this.y, (24 + 80 * easeOutQuad(t)) * (this.heavy ? 1.3 : 1), 0, Math.PI * 2); ctx.stroke();
+        const size = (this.heavy ? 70 : 46) * easeOutQuad(Math.min(1, this.age / 3));
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - t;
+        const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, size);
+        glow.addColorStop(0, 'rgba(255,255,255,1)');
+        glow.addColorStop(0.25, 'rgba(255,240,200,0.9)');
+        glow.addColorStop(0.6, this.color);
+        glow.addColorStop(1, 'rgba(255,200,120,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(this.x, this.y, size, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,245,215,0.9)';
+        ctx.lineCap = 'round';
+        for (const s of this.streaks) {
+            const r0 = size * 0.3 + size * 1.2 * t, r1 = r0 + size * s.len * (1 - t);
+            ctx.lineWidth = (this.heavy ? 3.5 : 2.5) * (1 - t) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(this.x + Math.cos(s.a) * r0, this.y + Math.sin(s.a) * r0);
+            ctx.lineTo(this.x + Math.cos(s.a) * r1, this.y + Math.sin(s.a) * r1);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = (1 - t) * 0.6;
+        ctx.lineWidth = (this.heavy ? 4 : 2.5) * (1 - t) + 0.5;
+        ctx.beginPath(); ctx.arc(this.x, this.y, (20 + 80 * easeOutQuad(t)) * (this.heavy ? 1.3 : 1), 0, Math.PI * 2); ctx.stroke();
     }
 }
 
@@ -153,7 +150,7 @@ export class BlockSpark extends Effect {
         ctx.strokeStyle = '#85c1e9';
         ctx.fillStyle = 'rgba(93,173,226,0.25)';
         ctx.beginPath(); ctx.arc(-10, 0, r, -Math.PI / 2.4, Math.PI / 2.4); ctx.fill();
-        ctx.save(); ctx.lineWidth += 3; ctx.strokeStyle = INK_COLOR; ctx.stroke(); ctx.restore();
+        ctx.globalCompositeOperation = 'lighter';
         ctx.stroke();
         // Hex facets
         ctx.lineWidth = 2;
@@ -188,15 +185,15 @@ export class RingPulse extends Effect {
 }
 
 /** Soft dust clouds at ground level. */
-export function dustPuff(x, groundY, { count = 6, spread = 30, size = [10, 18], color = 'rgba(200,180,150,0.8)', direction = 0 } = {}) {
+export function dustPuff(x, groundY, { count = 6, spread = 30, size = [10, 18], color = 'rgba(200,180,150,0.45)', direction = 0 } = {}) {
     const particles = [];
     for (let i = 0; i < count; i++) {
         const side = direction || (i % 2 === 0 ? 1 : -1);
         particles.push({
             x: x + randRange(-spread / 2, spread / 2), y: groundY - randRange(0, 6),
             vx: side * randRange(0.8, 3), vy: -randRange(0.3, 1.5),
-            size: randRange(...size), life: Math.round(randRange(16, 26)),
-            color, shape: 'circle', outline: 'rgba(42,29,23,0.45)', gravity: 0, drag: 0.92, shrink: 1.02
+            size: randRange(...size) * 1.6, life: Math.round(randRange(20, 34)),
+            color, shape: 'circle', gravity: 0, drag: 0.92, shrink: 1.025
         });
     }
     return new ParticleBurst(particles);

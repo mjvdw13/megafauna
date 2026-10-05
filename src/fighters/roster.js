@@ -1,6 +1,6 @@
 // ============================================================================
 // ROSTER
-// To add a character: create fighters/<id>/<id>.js (+ a rig) and list it here.
+// To add a character: create fighters/<id>/<id>.js (+ a 3-D model) and list it here.
 // Order here is the order on the character select screen. Characters marked
 // `secret: true` only appear once unlocked (see core/unlocks.js).
 // ============================================================================

@@ -3,7 +3,7 @@
 // Moves are Smash-style slots (see combat/moveset.js). Damage is before
 // Randy's 1.35x power, frame counts before his 0.8x attack speed.
 // ============================================================================
-import { randyRig } from './randy-rig.js';
+import { randyModel } from './randy-model.js';
 
 export default {
     id: 'randy',
@@ -39,7 +39,7 @@ export default {
             airborne: { x: 8, y: 4, width: 134, height: 106 }
         }
     },
-    rig: randyRig,
+    model: randyModel,
     landSquash: 0.22,
     heavyFootsteps: true,
 

@@ -3,7 +3,7 @@
 // Moves are Smash-style slots (see combat/moveset.js). Damage is before power,
 // frame counts before attack speed (both 1.0 for Riley).
 // ============================================================================
-import { rileyRig } from './riley-rig.js';
+import { rileyModel } from './riley-model.js';
 
 export default {
     id: 'riley',
@@ -30,7 +30,7 @@ export default {
     },
 
     body: { width: 80, height: 120 },
-    rig: rileyRig,
+    model: rileyModel,
 
     moves: {
         // ---- Ground

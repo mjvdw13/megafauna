@@ -5,7 +5,6 @@
 // ============================================================================
 import { easeOutQuad } from '../core/math.js';
 import { Callout, dustPuff, Effect, burst, RingPulse } from './effects.js';
-import { INK_COLOR } from './ink.js';
 
 /** An effect positioned at the attack's hitbox, following its owner and mirrored by facing. */
 class AttachedEffect extends Effect {
@@ -56,11 +55,10 @@ class SlashArc extends AttachedEffect {
         ctx.arc(cx, 0, r, a0, a1);
         ctx.arc(cx - th, 0, r, a1, a0, true);
         ctx.closePath();
-        ctx.lineJoin = 'round';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = INK_COLOR;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        // A faint motion blur of light rather than an inked shape, so it sits well over the 3-D fighters.
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha *= 0.6;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
         ctx.fill();
         // Colored leading edge
         ctx.lineWidth = Math.max(1.5, th * 0.35);

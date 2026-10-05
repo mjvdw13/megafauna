@@ -3,7 +3,8 @@
 // Runs a best-of-N match: round intro → fight → KO → next round / result.
 // The fighting itself happens in combat/match.js; this scene feeds it inputs
 // (player 2 is a keyboard player or a CpuController) and turns the events it
-// returns into hit sparks, sounds, hitstop and camera shake.
+// returns into hit sparks, sounds, hitstop and camera shake. The fight is drawn
+// in 3-D (render3d/fight-view.js) with 2-D effects and the HUD on top.
 // ============================================================================
 import { CpuController } from '../ai/cpu-controller.js';
 import { attackSound } from '../audio/sfx.js';
@@ -15,7 +16,8 @@ import { Fighter } from '../fighters/fighter.js';
 import { getCharacter } from '../fighters/roster.js';
 import { spawnAttackStartVfx, spawnAttackVfx } from '../graphics/attack-vfx.js';
 import { BlockSpark, burst, Callout, Camera, dustPuff, EffectsManager, HitSpark, RingPulse } from '../graphics/effects.js';
-import { drawProjectile, projectileEndEffect } from '../graphics/projectile-art.js';
+import { projectileEndEffect } from '../graphics/projectile-effects.js';
+import { FightView } from '../render3d/fight-view.js';
 import { getStage } from '../stages/index.js';
 import { Stage } from '../stages/stage.js';
 import { FightHud } from '../ui/hud.js';
@@ -32,6 +34,8 @@ export class FightScene {
         this.effects = new EffectsManager();
         this.camera = new Camera();
         this.hud = new FightHud();
+        this.paper = false; // no paper grain over the 3-D picture
+        this.view3d = null;
     }
 
     /** @param cpu  CPU difficulty for player 2, or null for a second human player */
@@ -43,10 +47,17 @@ export class FightScene {
             new Fighter(getCharacter(p2), { playerNumber: 2, render: true, label: cpu ? 'CPU' : 'P2' })
         ];
         this.match = new Match(this.stage, this.fighters);
+        this.view3d?.dispose();
+        this.view3d = new FightView(this.game.view, this.stage, this.fighters);
         this.cpu = cpu ? new CpuController(this.fighters[1], cpu) : null;
         this.wins = [0, 0];
         this.audio.music.play(this.stage.def.music || 'romp');
         this.startRound();
+    }
+
+    exit() {
+        this.view3d?.dispose();
+        this.view3d = null;
     }
 
     get audio() { return this.game.audio; }
@@ -342,13 +353,10 @@ export class FightScene {
     render(ctx) {
         ctx.save();
         this.camera.apply(ctx);
-        this.stage.renderBack(ctx);
-        // Draw the attacker on top so their swing reads clearly.
-        const order = [...this.fighters].sort((a, b) => Number(a.stateMachine.isAttacking()) - Number(b.stateMachine.isAttacking()));
-        for (const f of order) f.render(ctx);
-        for (const p of this.match.projectiles) drawProjectile(ctx, p, this.stage.time);
+        this.view3d.sync(this.match.projectiles);
+        this.view3d.render(ctx);
         this.effects.render(ctx);
-        this.stage.renderFront(ctx);
+        for (const f of this.fighters) if (!f.isHidden()) f.renderNameTag(ctx);
         if (this.game.debug) this.renderDebug(ctx);
         ctx.restore();
 
@@ -357,7 +365,7 @@ export class FightScene {
             ctx.fillStyle = `rgba(255,255,255,${this.koFlash / 10})`;
             ctx.fillRect(0, 0, SCREEN.width, SCREEN.height);
         }
-        this.hud.render(ctx, { wins: this.wins, roundsToWin: MATCH.roundsToWin, seconds: Math.max(0, Math.ceil(this.timeLeft / 60)), time: this.stage.time });
+        this.hud.render(ctx, { wins: this.wins, roundsToWin: MATCH.roundsToWin, seconds: Math.max(0, Math.ceil(this.timeLeft / 60)), time: this.stage.time, studio: this.game.studio });
         this.renderOverlay(ctx);
     }
 

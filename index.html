@@ -50,6 +50,10 @@
     <script>
         if (location.protocol === 'file:') document.getElementById('file-warning').style.display = 'flex';
     </script>
+    <!-- three.js is vendored (vendor/three); this maps the bare "three" imports to it. -->
+    <script type="importmap">
+        { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+    </script>
     <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -3,7 +3,6 @@
 // Health bars (with a trailing "damage ghost"), timer, round wins, combo counter.
 // ============================================================================
 import { SCREEN } from '../config.js';
-import { Puppet } from '../graphics/puppet.js';
 import { beginUi, inkPanel, inkRectPath, inkStar, uiInk } from './ink-ui.js';
 import { drawText, DISPLAY_FONT } from './text.js';
 
@@ -17,24 +16,21 @@ export class FightHud {
 
     reset(fighters) {
         this.players = fighters.map((f, i) => ({
-            fighter: f, ghost: f.health, lastHealth: f.health, delay: 0, combo: 0, comboTimer: 0,
-            portrait: new Puppet(f.def.rig, { seed: 200 + i })
+            fighter: f, ghost: f.health, lastHealth: f.health, delay: 0, combo: 0, comboTimer: 0
         }));
     }
 
-    /** Portrait expression follows the fighter (the framing stays on the idle pose so the face stays centered). */
-    portraitExpression(fighter) {
+    /** The portrait's pose follows the fighter: celebrating, reeling, or idle. */
+    portraitState(fighter) {
         const sm = fighter.stateMachine;
-        if (sm.is('victory')) return { eyes: 'happy', mouth: 0.7, bill: 0.6, jaw: 0.7 };
-        if (sm.isInHitstun() || sm.isKnockedDown() || sm.is('defeat')) return { eyes: 'dizzy', mouth: 0.6, bill: 0.6, jaw: 0.6 };
-        if (sm.isAttacking()) return { eyes: 'angry' };
-        return {};
+        if (sm.is('victory')) return 'victory';
+        if (sm.isInHitstun() || sm.isKnockedDown() || sm.is('defeat')) return 'hitstun';
+        return 'idle';
     }
 
     update() {
         for (const p of this.players) {
             const f = p.fighter;
-            p.portrait.update();
             if (f.health < p.lastHealth) p.delay = GHOST_DELAY;
             p.lastHealth = f.health;
             if (p.delay > 0) p.delay--;
@@ -48,13 +44,13 @@ export class FightHud {
         });
     }
 
-    render(ctx, { wins, roundsToWin, seconds, time = 0 }) {
+    render(ctx, { wins, roundsToWin, seconds, time = 0, studio = null }) {
         beginUi(time);
-        this.players.forEach((p, i) => this.renderPlayer(ctx, p, i, wins[i], roundsToWin));
+        this.players.forEach((p, i) => this.renderPlayer(ctx, p, i, wins[i], roundsToWin, studio));
         this.renderTimer(ctx, seconds);
     }
 
-    renderPlayer(ctx, p, index, wins, roundsToWin) {
+    renderPlayer(ctx, p, index, wins, roundsToWin, studio) {
         const f = p.fighter;
         const flip = index === 1;
         const x = flip ? SCREEN.width - BAR.margin - BAR.width : BAR.margin;
@@ -66,8 +62,7 @@ export class FightHud {
         ctx.clip(inkRectPath(portraitX + 4, 18, 72, 72, 10));
         ctx.fillStyle = '#fdf3dc';
         ctx.fillRect(portraitX, 14, 80, 80);
-        p.portrait.render({ ...p.portrait.currentPose(), ...this.portraitExpression(f) });
-        p.portrait.drawPortrait(ctx, portraitX + 3, 17, 74, { flip });
+        studio?.draw(ctx, { x: portraitX + 3, y: 17, width: 74, height: 74 }, f.def, { key: `hud-${index}`, state: this.portraitState(f), facingRight: !flip, portrait: true });
         ctx.restore();
 
         // Health bar: cream backing, trailing damage ghost, colored fill with a painted highlight.

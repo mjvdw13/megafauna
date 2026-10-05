@@ -4,6 +4,7 @@
 // the grid. The last tile picks a random stage.
 // ============================================================================
 import { SCREEN } from '../config.js';
+import { getSnapshot, getWorld } from '../render3d/worlds.js';
 import { Stage } from '../stages/stage.js';
 import { STAGES } from '../stages/index.js';
 import { beginUi, inkPanel, inkRectPath } from '../ui/ink-ui.js';
@@ -20,6 +21,7 @@ export class StageSelectScene {
         this.options = [...STAGES.map((s) => s.id), RANDOM];
         this.index = 0;
         this.time = 0;
+        this.paper = false;
     }
 
     enter() {
@@ -70,7 +72,9 @@ export class StageSelectScene {
 
     render(ctx) {
         const { width, height } = SCREEN;
-        this.previewStage.render(ctx);
+        const preview = getWorld(this.previewStage, this.game.view);
+        preview.update(1 / 60);
+        preview.render(ctx, this.game.view);
         const shade = ctx.createLinearGradient(0, 0, 0, height);
         shade.addColorStop(0, 'rgba(42,29,23,0.45)');
         shade.addColorStop(0.4, 'rgba(42,29,23,0.2)');
@@ -106,7 +110,7 @@ export class StageSelectScene {
             inkPanel(ctx, x, y + lift, TILE.width, TILE.height, { fill: '#fdf3dc', radius: 12, lineWidth: selected ? 5 : 3 });
             ctx.save();
             ctx.clip(inkRectPath(x + 5, y + lift + 5, TILE.width - 10, TILE.height - 10, 8));
-            if (stage) ctx.drawImage(stage.background, x, y + lift, TILE.width, TILE.height);
+            if (stage) ctx.drawImage(getSnapshot(stage.def, this.game.view), x, y + lift, TILE.width, TILE.height);
             else {
                 ctx.fillStyle = '#3b2a24'; ctx.fillRect(x, y + lift, TILE.width, TILE.height);
                 drawText(ctx, '?', x + TILE.width / 2, y + lift + 86, { size: 84, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: '#2a1d17', outlineWidth: 6 });

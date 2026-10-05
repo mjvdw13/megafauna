@@ -1,21 +1,13 @@
 // ============================================================================
 // STAGE
-// Runtime wrapper around a stage definition: caches the painted background,
-// runs its animated layers, and exposes the platform layout, ledges, pit and
-// physics for the fight.
+// Runtime wrapper around a stage definition: the platform layout, ledges, pit
+// and physics for the fight. The 3-D scenery is built from the definition's
+// world(kit) by render3d/stage-world.js.
 // ============================================================================
-import { PHYSICS_DEFAULTS, SCREEN, SPAWN_INSET, STAGE_DEFAULTS } from '../config.js';
-import { seededRandom } from '../core/math.js';
-import { createCanvas } from '../graphics/canvas.js';
-import { createSketch, paintPit, paintPlatforms, PIT_STYLES } from './sketch-kit.js';
+import { PHYSICS_DEFAULTS, SPAWN_INSET, STAGE_DEFAULTS } from '../config.js';
+import { PIT_STYLES } from './pits.js';
 
 const DEFAULT_LAYOUT = Object.freeze({ main: { left: 200, right: 1080 }, platforms: [] });
-
-function hashString(s) {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-    return h >>> 0;
-}
 
 export class Stage {
     constructor(definition) {
@@ -34,22 +26,7 @@ export class Stage {
         this.pitSurfaceY = main.y + 40;   // falling past this over the pit makes a splash
         this.floatY = main.y + 28;        // where floaters (Quackers) sit on water
         this.physics = { ...PHYSICS_DEFAULTS, ...(definition.physics || {}) };
-        this.layers = definition.createLayers ? definition.createLayers() : [];
         this.time = 0;
-        this.backgroundCanvas = null;
-    }
-
-    get background() {
-        if (!this.backgroundCanvas) {
-            const canvas = createCanvas(SCREEN.width, SCREEN.height);
-            const ctx = canvas.getContext('2d');
-            const kit = createSketch(ctx, seededRandom(hashString(this.id)));
-            this.def.paint(kit);
-            paintPit(kit, this.layout, this.pit);
-            paintPlatforms(kit, this.layout, this.def.platformStyle);
-            this.backgroundCanvas = canvas;
-        }
-        return this.backgroundCanvas;
     }
 
     spawnPoints() {
@@ -57,23 +34,5 @@ export class Stage {
         return { p1: main.left + SPAWN_INSET, p2: main.right - SPAWN_INSET };
     }
 
-    update() {
-        this.time++;
-        for (const layer of this.layers) layer.update?.(this.time);
-    }
-
-    renderBack(ctx) {
-        ctx.drawImage(this.background, 0, 0);
-        for (const layer of this.layers) if (!layer.front) layer.render(ctx, this.time);
-    }
-
-    renderFront(ctx) {
-        for (const layer of this.layers) if (layer.front) layer.render(ctx, this.time);
-    }
-
-    /** Full animated render (used by the stage-select preview). */
-    render(ctx) {
-        this.renderBack(ctx);
-        this.renderFront(ctx);
-    }
+    update() { this.time++; }
 }

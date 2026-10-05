@@ -8,7 +8,6 @@ import { SCREEN } from '../config.js';
 import { SecretCode, unlock } from '../core/unlocks.js';
 import { availableRoster } from '../fighters/roster.js';
 import { INK_COLOR as INK } from '../graphics/ink.js';
-import { Puppet } from '../graphics/puppet.js';
 import { characterBadges, renderStatBars } from '../ui/stat-bars.js';
 import { beginUi, inkPanel, inkRectPath } from '../ui/ink-ui.js';
 import { drawText, drawWrappedText, DISPLAY_FONT } from '../ui/text.js';
@@ -25,25 +24,17 @@ class PlayerCursor {
         this.playerNumber = playerNumber;
         this.index = index;
         this.ready = false;
-        this.refreshPuppet();
     }
 
     get def() { return this.scene.roster[this.index]; }
 
-    refreshPuppet() {
-        this.puppet = new Puppet(this.def.rig, { seed: this.playerNumber * 13 });
-        this.puppet.play(this.ready ? 'victory' : 'idle');
-    }
-
     move(delta) {
         const count = this.scene.roster.length;
         this.index = (this.index + delta + count) % count;
-        this.refreshPuppet();
     }
 
     setReady(ready) {
         this.ready = ready;
-        this.puppet.play(ready ? 'victory' : 'idle');
     }
 }
 
@@ -69,7 +60,6 @@ export class CharacterSelectScene {
 
     loadRoster() {
         this.roster = availableRoster();
-        this.rosterPuppets = this.roster.map((def, i) => new Puppet(def.rig, { seed: 40 + i }));
     }
 
     indexOf(id, fallback) {
@@ -86,7 +76,6 @@ export class CharacterSelectScene {
         this.cursors.forEach((c, i) => { c.index = this.indexOf(ids[i], 0); });
         if (!cursor.ready) {
             cursor.index = this.indexOf(SECRET.id, cursor.index);
-            cursor.refreshPuppet();
         }
         if (isNew) {
             this.reveal = REVEAL_FRAMES;
@@ -102,7 +91,6 @@ export class CharacterSelectScene {
 
     update() {
         this.time++;
-        for (const p of this.rosterPuppets) p.update();
         const { input, audio } = this.game;
         if (this.reveal > 0) this.reveal--;
         // Secret code: in vs-CPU mode player 1 enters it for whichever cursor they're steering.
@@ -126,7 +114,6 @@ export class CharacterSelectScene {
                 else if (pad.cancelPressed) { cursor.setReady(false); audio.play('menu-back'); }
             }
         }
-        for (const cursor of this.cursors) cursor.puppet.update();
 
         if (this.cursors.every((c) => c.ready)) {
             this.game.session.p1 = this.cursors[0].def.id;
@@ -186,9 +173,10 @@ export class CharacterSelectScene {
         drawText(ctx, def.name.toUpperCase(), x + PANEL.width / 2, y + 48, { size: 50, font: DISPLAY_FONT, weight: 'normal', color: def.color, outline: INK, outlineWidth: 6 });
         drawText(ctx, `${def.species} · ${def.tagline}`, x + PANEL.width / 2, y + 76, { size: 20, color: '#6b5a4e' });
 
-        // Animated preview, facing the opponent's panel
-        cursor.puppet.render();
-        cursor.puppet.drawAt(ctx, x + 114, y + 284, { flip: cursor.playerNumber === 2, scale: def.rig.previewScale ?? 1 });
+        // Animated 3-D preview, facing the opponent's panel
+        this.game.studio.draw(ctx, { x: x + 14, y: y + 92, width: 200, height: 200 }, def, {
+            key: `card-${cursor.playerNumber}`, state: ready ? 'victory' : 'idle', facingRight: cursor.playerNumber === 1
+        });
         if (!ready) {
             drawText(ctx, '◀', x + 18, y + 200, { size: 28, color: INK });
             drawText(ctx, '▶', x + 212, y + 200, { size: 28, color: INK });
@@ -232,9 +220,7 @@ export class CharacterSelectScene {
             ctx.clip(inkRectPath(x + 4, y + 4, size - 8, size - 8, 10));
             ctx.fillStyle = '#fdf3dc';
             ctx.fillRect(x, y, size, size);
-            const puppet = this.rosterPuppets[i];
-            puppet.render();
-            puppet.drawPortrait(ctx, x, y, size);
+            this.game.studio.draw(ctx, { x, y, width: size, height: size }, def, { key: `roster-${i}`, portrait: true });
             ctx.restore();
             this.cursors.filter((c) => c.index === i).forEach((c, k) => {
                 ctx.lineWidth = 5;

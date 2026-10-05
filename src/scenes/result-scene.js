@@ -4,7 +4,6 @@
 import { CPU_LEVELS } from '../ai/cpu-controller.js';
 import { SCREEN } from '../config.js';
 import { getCharacter } from '../fighters/roster.js';
-import { Puppet } from '../graphics/puppet.js';
 import { drawText, DISPLAY_FONT } from '../ui/text.js';
 
 export class ResultScene {
@@ -16,8 +15,6 @@ export class ResultScene {
     enter(match) {
         this.match = match;
         this.winnerDef = getCharacter(match.winner === 1 ? match.p1 : match.p2);
-        this.puppet = new Puppet(this.winnerDef.rig, { seed: 77 });
-        this.puppet.play('victory');
         this.time = 0;
         const { audio } = this.game;
         audio.music.stop();
@@ -33,7 +30,6 @@ export class ResultScene {
 
     update() {
         this.time++;
-        this.puppet.update();
         const { input } = this.game;
         if (this.time < 30) return; // ignore button mashing carried over from the fight
         if (input.player1.specialPressed || input.player2.specialPressed) this.game.changeScene('fight', this.match);
@@ -60,8 +56,7 @@ export class ResultScene {
         ctx.restore();
 
         drawText(ctx, 'WINNER!', width / 2, 118, { size: 110, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: '#2a1d17', outlineWidth: 12 });
-        this.puppet.render();
-        this.puppet.drawAt(ctx, width / 2, 430, { scale: 1.5 });
+        this.game.studio.draw(ctx, { x: width / 2 - 230, y: 150, width: 460, height: 290 }, this.winnerDef, { key: 'result', state: 'victory' });
         drawText(ctx, this.winnerDef.name.toUpperCase(), width / 2, 490, { size: 80, font: DISPLAY_FONT, weight: 'normal', color: this.winnerDef.color, outline: '#2a1d17', outlineWidth: 9 });
         drawText(ctx, this.winnerLabel, width / 2, 540, { size: 32, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
 

@@ -1,20 +1,26 @@
 // ============================================================================
 // GAME
-// Owns shared services (input, audio, session) and the active scene.
-// Runs the simulation at a fixed 60 Hz so speed doesn't depend on the monitor.
+// Owns shared services (input, audio, session, the 3-D view) and the active
+// scene. Runs the simulation at a fixed 60 Hz so speed doesn't depend on the
+// monitor. Scenes draw into one 2-D canvas; 3-D pictures from the view are
+// composited into it.
 // ============================================================================
 import { CPU_LEVEL_IDS } from '../ai/cpu-controller.js';
 import { AudioEngine } from '../audio/audio-engine.js';
 import { FIXED_STEP_MS, MAX_STEPS_PER_FRAME, SCREEN } from '../config.js';
 import { ROSTER } from '../fighters/roster.js';
 import { createPaperOverlay, drawPaper } from '../graphics/paper.js';
+import { getTemplate } from '../render3d/models.js';
+import { Studio } from '../render3d/studio.js';
+import { View3D } from '../render3d/view.js';
+import { getSnapshot } from '../render3d/worlds.js';
 import { CharacterSelectScene } from '../scenes/character-select-scene.js';
 import { FightScene } from '../scenes/fight-scene.js';
 import { ResultScene } from '../scenes/result-scene.js';
 import { StageSelectScene } from '../scenes/stage-select-scene.js';
 import { TitleScene } from '../scenes/title-scene.js';
 import { STAGES } from '../stages/index.js';
-import { drawText } from '../ui/text.js';
+import { drawText, DISPLAY_FONT } from '../ui/text.js';
 import { InputHandler } from './input.js';
 
 const TOAST_FRAMES = 90;
@@ -27,6 +33,8 @@ export class Game {
         this.audio = new AudioEngine();
         this.toast = null;
         this.paper = createPaperOverlay(SCREEN.width, SCREEN.height);
+        this.view = new View3D();
+        this.studio = new Studio(this.view);
 
         // Choices that persist between scenes (and rematches).
         // mode: 'cpu' (P1 vs the computer) or 'versus' (two players). cpuLevel: a key of CPU_LEVELS.
@@ -41,12 +49,42 @@ export class Game {
             fight: new FightScene(this),
             result: new ResultScene(this)
         };
+    }
+
+    /**
+     * Build every character model and stage world before the first frame, so menus
+     * and fights never stall. Draws a progress bar while it works.
+     */
+    async preload() {
+        const jobs = [
+            ...ROSTER.map((def) => [`Building ${def.name}`, () => getTemplate(def)]),
+            ...STAGES.map((def) => [`Building ${def.name}`, () => getSnapshot(def, this.view)])
+        ];
+        for (const [i, [label, job]] of jobs.entries()) {
+            this.drawLoading(label, i / jobs.length);
+            await new Promise((resolve) => setTimeout(resolve, 16)); // let the progress bar paint
+            job();
+        }
         this.changeScene('title');
+    }
+
+    drawLoading(label, progress) {
+        const { ctx } = this;
+        const { width, height } = SCREEN;
+        ctx.fillStyle = '#16213e';
+        ctx.fillRect(0, 0, width, height);
+        drawText(ctx, 'MEGAFAUNA', width / 2, height / 2 - 60, { size: 96, font: DISPLAY_FONT, weight: 'normal', color: '#f25c3b', outline: '#2a1d17', outlineWidth: 10 });
+        ctx.fillStyle = '#2a1d17';
+        ctx.fillRect(width / 2 - 252, height / 2 + 18, 504, 28);
+        ctx.fillStyle = '#f7c948';
+        ctx.fillRect(width / 2 - 248, height / 2 + 22, 496 * progress, 20);
+        drawText(ctx, `${label}...`, width / 2, height / 2 + 84, { size: 24, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
     }
 
     changeScene(name, params = {}) {
         const scene = this.scenes[name];
         if (!scene) throw new Error(`Unknown scene "${name}"`);
+        this.scene?.exit?.();
         this.sceneName = name;
         this.scene = scene;
         scene.enter?.(params);
@@ -55,12 +93,16 @@ export class Game {
     start() {
         this.lastTime = performance.now();
         this.accumulator = 0;
+        this.clock = 0;
         requestAnimationFrame((t) => this.frame(t));
     }
 
     frame(now) {
+        const elapsed = now - this.lastTime;
+        this.clock += elapsed / 1000;
+        this.view.endFrame(elapsed, this.clock);
         // Clamp long gaps (tab in background) so we don't fast-forward.
-        this.accumulator += Math.min(250, now - this.lastTime);
+        this.accumulator += Math.min(250, elapsed);
         this.lastTime = now;
         let steps = 0;
         while (this.accumulator >= FIXED_STEP_MS && steps < MAX_STEPS_PER_FRAME) {
@@ -93,7 +135,7 @@ export class Game {
         this.ctx.fillStyle = '#16213e';
         this.ctx.fillRect(0, 0, SCREEN.width, SCREEN.height);
         this.scene.render(this.ctx);
-        drawPaper(this.ctx, this.paper);
+        if (this.scene.paper !== false) drawPaper(this.ctx, this.paper);
         if (this.toast) {
             const alpha = Math.min(1, this.toast.frames / 20);
             drawText(this.ctx, this.toast.text, SCREEN.width - 24, SCREEN.height - 22, { size: 22, align: 'right', color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5, alpha });

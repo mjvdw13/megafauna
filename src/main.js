@@ -8,5 +8,6 @@ const fontsReady = Promise.all([document.fonts.load('40px Bangers'), document.fo
 await Promise.race([fontsReady, new Promise((resolve) => setTimeout(resolve, 1500))]).catch(() => {});
 
 const game = new Game(document.getElementById('game-canvas'));
-game.start();
 window.game = game; // handy for poking at state from the dev console
+await game.preload();
+game.start();

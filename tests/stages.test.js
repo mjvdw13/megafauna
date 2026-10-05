@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SCREEN, SPAWN_INSET } from '../src/config.js';
 import { STAGES } from '../src/stages/index.js';
-import { PIT_STYLES } from '../src/stages/sketch-kit.js';
+import { PIT_STYLES } from '../src/stages/pits.js';
 import { Stage } from '../src/stages/stage.js';
 
-test('stage ids are unique and every stage has display info and a painter', () => {
+test('stage ids are unique and every stage has display info and a 3-D world', () => {
     assert.equal(new Set(STAGES.map((s) => s.id)).size, STAGES.length);
     for (const def of STAGES) {
         assert.ok(def.name && def.description && def.accent, `${def.id} display info`);
         assert.ok(Array.isArray(def.traits), `${def.id} traits`);
-        assert.equal(typeof def.paint, 'function', `${def.id} paint`);
+        assert.equal(typeof def.world, 'function', `${def.id} world`);
     }
 });
 
@@ -47,9 +47,14 @@ test('spawn points sit on the main platform with room between fighters', () => {
     }
 });
 
-test('ambient layers update without touching the DOM', () => {
+test('every world builds the arena and runs without the 3-D engine', () => {
     for (const def of STAGES) {
-        const stage = new Stage(def);
-        for (let i = 0; i < 5; i++) stage.update();
+        const calls = [];
+        const kit = new Proxy({ x: (px) => px / 100, y: (py) => py / 100, main: { left: -4, right: 4, width: 8 }, pitY: -0.4, random: (a, b) => (a + b) / 2 }, {
+            get: (target, key) => target[key] ?? ((...args) => { calls.push(key); return { node: {}, pos: args[2] ?? [0, 0, 0] }; })
+        });
+        def.world(kit);
+        assert.ok(calls.includes('ground'), `${def.id} world builds its main platform`);
+        assert.ok(calls.includes('sky') && calls.includes('light'), `${def.id} world sets a sky and a light`);
     }
 });

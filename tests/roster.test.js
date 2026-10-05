@@ -12,11 +12,12 @@ test('character ids are unique', () => {
     assert.equal(new Set(ids).size, ids.length);
 });
 
-test('every character defines the full stat block, body and rig', () => {
+test('every character defines the full stat block, body and model', () => {
     for (const def of ROSTER) {
         for (const stat of REQUIRED_STATS) assert.equal(typeof def.stats[stat], 'number', `${def.id}.stats.${stat}`);
         assert.ok(def.body.width > 0 && def.body.height > 0, `${def.id} body`);
-        assert.equal(typeof def.rig.draw, 'function', `${def.id} rig draw`);
+        assert.equal(typeof def.model.apply, 'function', `${def.id} model apply`);
+        assert.ok(def.model.bones.length > 0 && def.model.parts.length > 0, `${def.id} model skeleton and body`);
         assert.ok(def.name && def.species && def.tagline && def.description, `${def.id} display text`);
     }
 });
@@ -78,12 +79,54 @@ test('Randy is the slowest and hardest-hitting character', () => {
 const REQUIRED_POSES = ['idle', 'walking', 'crouching', 'jumping', 'falling', 'blocking', 'hitstun', 'knockdown', 'getup', 'victory', 'defeat',
     'attack_windup', 'attack_strike', 'crouch_windup', 'crouch_attack', 'air_windup', 'air_attack'];
 
-test('every rig has all required poses, and every pose a move names exists', () => {
+test('every model has all required poses, and every pose a move names exists', () => {
     for (const def of ROSTER) {
-        const has = (name) => !!(def.rig.poses?.[name] || def.rig.cycles?.[name]);
-        for (const name of REQUIRED_POSES) assert.ok(has(name), `${def.id} rig missing "${name}"`);
+        const has = (name) => !!(def.model.poses?.[name] || def.model.cycles?.[name]);
+        for (const name of REQUIRED_POSES) assert.ok(has(name), `${def.id} model missing "${name}"`);
         for (const attack of Object.values(new Fighter(def).attacks)) {
             for (const name of Object.values(attack.poses || {})) assert.ok(has(name), `${def.id} ${attack.name} uses missing pose "${name}"`);
+        }
+    }
+});
+
+test('model parts, feet and poses only name bones and parameters that exist', () => {
+    for (const def of ROSTER) {
+        const m = def.model;
+        const bones = new Set(m.bones.map(([name]) => name));
+        for (const [name, parent] of m.bones) assert.ok(!parent || bones.has(parent), `${def.id} bone ${name} has unknown parent ${parent}`);
+        for (const part of m.parts) {
+            for (const prim of part.prims) {
+                assert.ok(bones.has(prim.bone), `${def.id} shape on unknown bone "${prim.bone}"`);
+                assert.ok(m.colors[prim.col], `${def.id} shape uses unknown color "${prim.col}"`);
+            }
+        }
+        for (const foot of m.feet) assert.ok(bones.has(foot.bone), `${def.id} foot on unknown bone "${foot.bone}"`);
+        const params = new Set(Object.keys(m.basePose));
+        const check = (pose, name) => { for (const key of Object.keys(pose)) assert.ok(params.has(key), `${def.id} pose "${name}" sets unknown parameter "${key}"`); };
+        for (const [name, pose] of Object.entries(m.poses)) check(pose, name);
+        for (const [name, cycle] of Object.entries(m.cycles)) for (const t of [0, 17, 50]) check(cycle(t), name);
+    }
+});
+
+/** Stand-in bones: plain objects shaped like three.js Object3Ds, so apply() runs in Node. */
+function fakeNode() {
+    const v = () => ({ x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; }, setScalar(s) { this.x = this.y = this.z = s; } });
+    return { position: v(), rotation: v(), scale: v() };
+}
+
+test('every pose drives the skeleton to finite angles', () => {
+    for (const def of ROSTER) {
+        const m = def.model;
+        const bones = Object.fromEntries(m.bones.map(([name]) => [name, fakeNode()]));
+        const extras = new Proxy({}, { get: (target, key) => (target[key] ??= fakeNode()) });
+        const state = {};
+        const names = [...Object.keys(m.poses), ...Object.keys(m.cycles)];
+        for (const name of names) {
+            const pose = { ...m.basePose, ...(m.cycles[name] ? m.cycles[name](23) : m.poses[name]) };
+            for (let frame = 0; frame < 3; frame++) m.apply({ bones, extras, state }, pose, { time: 40 + frame, dt: 1 / 60, motion: [3, -2], grounded: true });
+            for (const [bone, node] of Object.entries(bones)) {
+                for (const axis of ['x', 'y', 'z']) assert.ok(Number.isFinite(node.rotation[axis]), `${def.id} pose "${name}" gives ${bone}.rotation.${axis} = ${node.rotation[axis]}`);
+            }
         }
     }
 });

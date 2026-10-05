@@ -1,12 +1,13 @@
 // ============================================================================
 // TITLE SCENE
 // Main menu: fight the CPU or another player, and pick the CPU's difficulty.
+// Behind it, the roster stands on the Sunny Meadow island in 3-D.
 // ============================================================================
 import { CPU_LEVEL_IDS, CPU_LEVELS } from '../ai/cpu-controller.js';
 import { SCREEN } from '../config.js';
 import { availableRoster } from '../fighters/roster.js';
-import { Puppet } from '../graphics/puppet.js';
-import { Stage } from '../stages/stage.js';
+import { Actor } from '../render3d/actor.js';
+import { getWorld } from '../render3d/worlds.js';
 import { STAGES } from '../stages/index.js';
 import { beginUi, inkPanel } from '../ui/ink-ui.js';
 import { drawText, DISPLAY_FONT } from '../ui/text.js';
@@ -23,22 +24,33 @@ export class TitleScene {
     constructor(game) {
         this.game = game;
         this.time = 0;
-        this.backdrop = new Stage(STAGES[0]);
+        this.paper = false;
+        this.actors = [];
     }
 
     enter() {
         this.time = 0;
         // Line up everyone who can be picked (a secret character joins once unlocked).
         this.roster = availableRoster();
-        this.puppets = this.roster.map((def, i) => new Puppet(def.rig, { seed: i + 7 }));
+        this.world = getWorld(STAGES[0], this.game.view);
+        this.actors = this.roster.map((def) => new Actor(def));
+        const slot = 260, startX = SCREEN.width / 2 - (this.roster.length * slot) / 2;
+        this.actors.forEach((actor, i) => {
+            actor.facingRight = i < this.roster.length / 2;
+            actor.holder.position.set(this.world.toWorldX(startX + i * slot + slot / 2), 0, 0.4);
+            this.world.scene.add(actor.holder);
+        });
         this.index = this.game.session.mode === 'versus' ? 1 : 0;
         this.game.audio.music.play('title');
     }
 
+    exit() {
+        for (const actor of this.actors) this.world.scene.remove(actor.holder);
+        this.actors = [];
+    }
+
     update() {
         this.time++;
-        this.backdrop.update();
-        for (const p of this.puppets) p.update();
         const { input, audio, session } = this.game;
         const pads = [input.player1, input.player2];
         const pressed = (action) => pads.some((pad) => pad[`${action}Pressed`]);
@@ -61,8 +73,10 @@ export class TitleScene {
 
     render(ctx) {
         const { width, height } = SCREEN;
-        this.backdrop.render(ctx);
-        ctx.fillStyle = 'rgba(40,24,30,0.35)';
+        for (const actor of this.actors) actor.update(actor.facingRight);
+        this.world.update(1 / 60);
+        this.world.render(ctx, this.game.view);
+        ctx.fillStyle = 'rgba(40,24,30,0.3)';
         ctx.fillRect(0, 0, width, height);
 
         const scale = 1 + Math.sin(this.time * 0.05) * 0.04;
@@ -77,9 +91,6 @@ export class TitleScene {
         const slot = 260;
         const startX = width / 2 - (this.roster.length * slot) / 2;
         this.roster.forEach((def, i) => {
-            const puppet = this.puppets[i];
-            puppet.render();
-            puppet.drawAt(ctx, startX + i * slot + slot / 2, 580, { flip: i >= this.roster.length / 2 });
             drawText(ctx, def.name, startX + i * slot + slot / 2, 620, { size: 26, font: DISPLAY_FONT, weight: 'normal', color: def.color, outline: '#2a1d17', outlineWidth: 5 });
         });
 

@@ -3,7 +3,7 @@
 // Moves are Smash-style slots (see combat/moveset.js). Damage is before
 // Quackers' 0.85x power, frame counts before 1.2x attack speed.
 // ============================================================================
-import { quackersRig } from './quackers-rig.js';
+import { quackersModel } from './quackers-model.js';
 
 export default {
     id: 'quackers',
@@ -40,7 +40,7 @@ export default {
             airborne: { x: 16, y: 8, width: 50, height: 80 }
         }
     },
-    rig: quackersRig,
+    model: quackersModel,
     landSquash: 0.18,
 
     // Hitboxes are authored for the 96px body.

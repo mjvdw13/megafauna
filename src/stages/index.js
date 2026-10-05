@@ -1,9 +1,9 @@
 // ============================================================================
 // STAGE REGISTRY
 // To add a stage: create stages/<id>.js exporting a definition and list it here.
-// Definition fields: id, name, description, traits[], accent, paint(kit),
-// layout { main: {left, right}, platforms: [[left, right, y], ...] }, pit (see PIT_STYLES),
-// and optionally platformStyle, groundY, physics {gravity, friction}, createLayers(),
+// Definition fields: id, name, description, traits[], accent, world(kit) (see render3d/world-kit.js),
+// layout { main: {left, right}, platforms: [[left, right, y], ...] }, pit (see pits.js),
+// and optionally platformStyle { kind }, groundY, physics {gravity, friction},
 // music (a track name from audio/music.js).
 // ============================================================================
 import backyard from './backyard.js';

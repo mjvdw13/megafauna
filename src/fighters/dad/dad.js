@@ -3,7 +3,7 @@
 // Moves are Smash-style slots (see combat/moveset.js). Damage is before Dad's
 // 1.2x power, frame counts before his 0.9x attack speed.
 // ============================================================================
-import { dadRig } from './dad-rig.js';
+import { dadModel } from './dad-model.js';
 
 export default {
     id: 'dad',
@@ -40,7 +40,7 @@ export default {
             airborne: { x: 14, y: 12, width: 94, height: 136 }
         }
     },
-    rig: dadRig,
+    model: dadModel,
     landSquash: 0.2,
     heavyFootsteps: true,
 

@@ -14,23 +14,17 @@ import { blendPose, Puppet } from '../graphics/puppet.js';
 
 const THREAT_RANGE = 260;
 
-/** On-screen size of a character's rendered canvas; offsetY is how far it extends below the feet. */
-export function spriteBoxFor(definition) {
-    const { width, height, originY } = definition.rig.canvas;
-    return { width, height, offsetY: height - originY };
-}
-
 const AFTERIMAGE_COUNT = 5;
 const LAND_SQUASH_FRAMES = 8;
 
-/** Rig poses used for each attack stance: neutral -> windup -> strike -> back to neutral. */
+/** Model poses used for each attack stance: neutral -> windup -> strike -> back to neutral. */
 const ATTACK_POSES = {
     stand: { neutral: 'idle', windup: 'attack_windup', strike: 'attack_strike' },
     crouch: { neutral: 'crouching', windup: 'crouch_windup', strike: 'crouch_attack' },
     air: { neutral: 'falling', windup: 'air_windup', strike: 'air_attack' }
 };
 
-/** Rig pose for each state, in order of preference (rigs only need the core poses). */
+/** Model pose for each state, in order of preference (models only need the core poses). */
 const STATE_POSES = {
     running: ['running', 'walking'],
     shielding: ['shield', 'blocking'],
@@ -48,9 +42,9 @@ const STATE_POSES = {
 
 export class Fighter {
     /**
-     * @param definition  character definition (stats, body, moves, abilities, rig)
+     * @param definition  character definition (stats, body, moves, abilities, model)
      * @param options.playerNumber 1 or 2
-     * @param options.render       create a puppet for drawing (false for headless tests)
+     * @param options.render       animate poses for the 3D model (false for headless tests)
      * @param options.label        name tag prefix (default "P1"/"P2"; "CPU" for the computer)
      */
     constructor(definition, { playerNumber = 1, render = false, label = `P${playerNumber}` } = {}) {
@@ -78,10 +72,9 @@ export class Fighter {
         this.width = body.width;
         this.height = body.height;
         this.hurtboxes = { ...DEFAULT_HURTBOXES, ...(body.hurtboxes || {}) };
-        this.spriteBox = spriteBoxFor(definition);
 
         this.attacks = buildMoveset(definition);
-        this.puppet = render ? new Puppet(definition.rig, { seed: playerNumber * 101 + definition.id.length }) : null;
+        this.puppet = render ? new Puppet(definition.model) : null;
         this.physicsMain = null; // the main platform, set by the match so ledge climbs know where to stand
         this.reset(0, this.height, true);
     }
@@ -290,7 +283,7 @@ export class Fighter {
         this.puppet.update([this.velocityX * dir, this.velocityY]);
 
         // Footstep events (heavy characters kick up dust on each step).
-        const stepFrames = this.def.rig.stepFrames || 12;
+        const stepFrames = this.def.model.stepFrames || 12;
         if (this.stateMachine.isWalking() && Math.floor(this.puppet.stateTime) % stepFrames === 0) this.events.push({ type: 'step' });
 
         // Afterimage trail for moves flagged with afterimages.
@@ -370,7 +363,7 @@ export class Fighter {
 
     // ------------------------------------------------------------------ rendering
 
-    /** The rig pose to draw this frame. */
+    /** The model pose to show this frame. */
     currentPose() {
         if (this.stateMachine.isAttacking() && this.currentAttack) return this.attackPose();
         if (this.gliding && this.puppet.has('glide')) return this.puppet.poseFor('glide');
@@ -396,7 +389,7 @@ export class Fighter {
         return blendPose(strike, settle, easeInOutQuad(t));
     }
 
-    /** Procedural squash/stretch and offsets layered on top of the sprite art. */
+    /** Procedural squash/stretch, lunges and spins layered on top of the model's pose (px and radians). */
     poseTransform() {
         const pose = { dx: 0, dy: 0, scaleX: 1, scaleY: 1, flip: false, rotate: 0, alpha: 1 };
         const attack = this.currentAttack;
@@ -446,50 +439,7 @@ export class Fighter {
         return pose;
     }
 
-    drawSprite(ctx, image, x, y, facingRight, pose, alpha = 1) {
-        const { width, height, offsetY } = this.spriteBox;
-        ctx.save();
-        ctx.globalAlpha = alpha * (pose.alpha ?? 1);
-        if (pose.rotate) {
-            // Spin around the middle of the body rather than the feet.
-            ctx.translate(x + this.width / 2, y + this.height / 2);
-            ctx.rotate(pose.rotate);
-            ctx.translate(0, this.height / 2 + offsetY);
-        } else {
-            ctx.translate(x + this.width / 2, y + this.height + offsetY);
-        }
-        if (!facingRight !== pose.flip) ctx.scale(-1, 1);
-        ctx.scale(pose.scaleX, pose.scaleY);
-        ctx.drawImage(image, -width / 2 + pose.dx, -height + pose.dy, width, height);
-        ctx.restore();
-    }
-
-    render(ctx) {
-        if (!this.puppet) return this.renderFallback(ctx);
-        if (this.isHidden()) return this.renderNameTag(ctx);
-        const jitter = this.shakeFrames > 0 ? (Math.random() - 0.5) * 6 : 0;
-        const x = this.x + jitter;
-        const transform = this.poseTransform();
-        const pose = this.currentPose();
-
-        // Afterimages, oldest (faintest) first.
-        this.trail.forEach((ghost, i) => {
-            const image = this.puppet.renderFlat(ghost.pose, this.accentColor);
-            this.drawSprite(ctx, image, ghost.x, ghost.y, ghost.facingRight, ghost.transform, 0.1 + 0.07 * i);
-        });
-
-        const blinking = (this.invincible || this.invulnTimer > 0) && Math.floor(this.stateMachine.stateTime / 3) % 2 === 0;
-        this.drawSprite(ctx, this.puppet.render(pose), x, this.y, this.facingRight, transform, blinking ? 0.55 : 1);
-
-        // Silhouette overlays: white hit flash, orange armor flash, golden charge glow.
-        const overlay = this.overlayTint();
-        if (overlay) this.drawSprite(ctx, this.puppet.renderFlat(pose, overlay.color), x, this.y, this.facingRight, transform, overlay.alpha);
-
-        if (this.stateMachine.isShielding()) this.renderShield(ctx);
-        if (this.stateMachine.is(S.DIZZY)) this.renderDizzyStars(ctx);
-        this.renderNameTag(ctx);
-    }
-
+    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow. */
     overlayTint() {
         if (this.flashFrames > 0) {
             return this.flashKind === 'armor' ? { color: '#ff9f43', alpha: 0.7 } : { color: '#ffffff', alpha: 0.85 };
@@ -498,46 +448,7 @@ export class Fighter {
         return null;
     }
 
-    /** A bubble around the body that shrinks as the shield wears down. */
-    renderShield(ctx) {
-        const k = Math.max(0.15, this.shieldHP / DEFENSE.shieldMax);
-        const r = Math.max(this.width, this.height) * 0.62 * (0.55 + 0.45 * k);
-        const cx = this.centerX, cy = this.y + this.height * 0.55;
-        ctx.save();
-        ctx.globalAlpha = 0.28 + 0.12 * Math.sin(this.stateMachine.stateTime * 0.3);
-        ctx.fillStyle = this.accentColor;
-        ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 1.05, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 0.8;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#2a1d17';
-        ctx.stroke();
-        ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.ellipse(cx - r * 0.35, cy - r * 0.45, r * 0.25, r * 0.12, -0.6, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-    }
-
-    renderDizzyStars(ctx) {
-        const t = this.stateMachine.stateTime * 0.12;
-        ctx.save();
-        for (let i = 0; i < 3; i++) {
-            const a = t + (i * Math.PI * 2) / 3;
-            const sx = this.centerX + Math.cos(a) * 30, sy = this.y - 12 + Math.sin(a) * 8;
-            ctx.fillStyle = '#ffe14d';
-            ctx.strokeStyle = '#2a1d17';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            for (let p = 0; p < 10; p++) {
-                const r = p % 2 === 0 ? 8 : 3.5, pa = (p / 10) * Math.PI * 2 - Math.PI / 2;
-                const px = sx + Math.cos(pa) * r, py = sy + Math.sin(pa) * r;
-                if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-            }
-            ctx.closePath(); ctx.fill(); ctx.stroke();
-        }
-        ctx.restore();
-    }
-
+    /** "P1 Riley" above the fighter, drawn on the 2-D layer over the 3-D scene. */
     renderNameTag(ctx) {
         ctx.save();
         ctx.font = 'bold 14px Arial';
@@ -550,11 +461,5 @@ export class Fighter {
         ctx.fillStyle = this.playerNumber === 1 ? '#85c1e9' : '#f1948a';
         ctx.fillText(label, this.centerX, y);
         ctx.restore();
-    }
-
-    renderFallback(ctx) {
-        ctx.fillStyle = this.flashFrames > 0 ? '#fff' : this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        this.renderNameTag(ctx);
     }
 }
