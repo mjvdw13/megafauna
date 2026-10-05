@@ -6,6 +6,7 @@
 // No rendering happens here.
 // ============================================================================
 import { BURN, DEFENSE, KNOCKBACK_SCALE } from '../config.js';
+import { AttackPhase } from './attack.js';
 import { checkBoxCollision } from './hitbox.js';
 import { CharacterStates as S } from './states.js';
 
@@ -98,6 +99,10 @@ export function applyHit({ attack, attacker, defender, impact, sourceX, damageSc
     const comboHit = sm.isInHitstun() ? defender.comboHitCount + 1 : 1;
     const scaling = Math.max(COMBO_SCALING_FLOOR, 1 - (comboHit - 1) * COMBO_SCALING_STEP);
     event.result = HitResult.HIT;
+    // For the presentation: hitting a move as it comes out (counter hit) or while it recovers (punish).
+    const interrupted = defender.attackPhase;
+    event.counterHit = !!interrupted && interrupted !== AttackPhase.RECOVERY && comboHit === 1;
+    event.punish = interrupted === AttackPhase.RECOVERY && comboHit === 1;
     event.damage = Math.max(1, Math.floor(attack.damage * damageScale * scaling));
     event.comboHit = comboHit;
     defender.takeDamage(event.damage);

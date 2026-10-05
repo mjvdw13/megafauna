@@ -2,10 +2,35 @@
 // EFFECTS
 // Short-lived visual effects drawn in screen space over the 3-D picture:
 // impact flashes, glowing particles, dust, comic callouts. Each effect has
-// update() → alive? and render(ctx).
+// update() → alive? and render(ctx). The bigger hit effects (impact stars,
+// focus lines, shockwaves) are in impacts.js; the camera is in camera.js.
 // ============================================================================
 import { clamp, easeOutBack, easeOutQuad, randRange } from '../core/math.js';
+import { createCanvas } from './canvas.js';
 import { INK_COLOR } from './ink.js';
+
+/**
+ * A soft round sprite in `color` (bright core fading out at the rim), drawn once per color and
+ * reused: much cheaper than a fresh radial gradient for every particle every frame.
+ */
+const softSprites = new Map();
+const SOFT_SIZE = 64;
+export function softSprite(color) {
+    let sprite = softSprites.get(color);
+    if (!sprite) {
+        sprite = createCanvas(SOFT_SIZE, SOFT_SIZE);
+        const g = sprite.getContext('2d');
+        const r = SOFT_SIZE / 2;
+        const grad = g.createRadialGradient(r, r, 0, r, r, r);
+        grad.addColorStop(0, color);
+        grad.addColorStop(0.55, color);
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, SOFT_SIZE, SOFT_SIZE);
+        softSprites.set(color, sprite);
+    }
+    return sprite;
+}
 
 export class EffectsManager {
     constructor() { this.effects = []; }
@@ -33,7 +58,8 @@ export class Effect {
 
 /**
  * Generic particle burst. Particle fields: x, y, vx, vy, size, color, life,
- * gravity, drag, shrink, shape ('square' | 'circle' | 'line' | 'feather'), spin.
+ * gravity, drag, shrink, shape ('square' | 'circle' | 'line' | 'feather'), spin,
+ * additive (glows: adds light instead of covering what's behind).
  */
 export class ParticleBurst extends Effect {
     constructor(particles) {
@@ -54,18 +80,15 @@ export class ParticleBurst extends Effect {
     render(ctx) {
         for (const p of this.particles) {
             if (p.life <= 0 || p.size < 0.4) continue;
-            ctx.globalAlpha = clamp(p.life / Math.min(10, p.maxLife), 0, 1);
+            ctx.globalAlpha = clamp(p.life / Math.min(10, p.maxLife), 0, 1) * (p.alpha ?? 1);
+            ctx.globalCompositeOperation = p.additive ? 'lighter' : 'source-over';
             ctx.fillStyle = p.color;
             ctx.strokeStyle = p.color;
             if (p.shape === 'circle' || p.shape === 'blob') {
                 // Soft-edged: bright core fading out, so particles read as light and dust, not ink.
-                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size / 2);
-                g.addColorStop(0, p.color);
-                g.addColorStop(0.55, p.color);
-                g.addColorStop(1, 'rgba(255,255,255,0)');
-                ctx.fillStyle = g;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); ctx.fill();
+                ctx.drawImage(softSprite(p.color), p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
             } else if (p.shape === 'line') {
+                ctx.lineCap = 'round';
                 ctx.lineWidth = Math.max(1, p.size / 3);
                 ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5); ctx.stroke();
             } else if (p.shape === 'feather') {
@@ -96,42 +119,6 @@ export function burst(x, y, { count = 8, colors = ['#fff'], speed = [3, 8], size
 }
 
 // ---------------------------------------------------------------------------- impacts
-
-/** Impact: a bright flash, light streaks flying out along the hit, and a shockwave ring. */
-export class HitSpark extends Effect {
-    constructor(x, y, { heavy = false, color = '#f1c40f', direction = 1 } = {}) {
-        super(heavy ? 16 : 11);
-        Object.assign(this, { x, y, heavy, color, direction });
-        this.streaks = Array.from({ length: heavy ? 9 : 6 }, () => ({ a: (direction > 0 ? 0 : Math.PI) + randRange(-1.1, 1.1), len: randRange(0.6, 1.2) }));
-    }
-
-    render(ctx) {
-        const t = this.t;
-        const size = (this.heavy ? 70 : 46) * easeOutQuad(Math.min(1, this.age / 3));
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 1 - t;
-        const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, size);
-        glow.addColorStop(0, 'rgba(255,255,255,1)');
-        glow.addColorStop(0.25, 'rgba(255,240,200,0.9)');
-        glow.addColorStop(0.6, this.color);
-        glow.addColorStop(1, 'rgba(255,200,120,0)');
-        ctx.fillStyle = glow;
-        ctx.beginPath(); ctx.arc(this.x, this.y, size, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,245,215,0.9)';
-        ctx.lineCap = 'round';
-        for (const s of this.streaks) {
-            const r0 = size * 0.3 + size * 1.2 * t, r1 = r0 + size * s.len * (1 - t);
-            ctx.lineWidth = (this.heavy ? 3.5 : 2.5) * (1 - t) + 0.5;
-            ctx.beginPath();
-            ctx.moveTo(this.x + Math.cos(s.a) * r0, this.y + Math.sin(s.a) * r0);
-            ctx.lineTo(this.x + Math.cos(s.a) * r1, this.y + Math.sin(s.a) * r1);
-            ctx.stroke();
-        }
-        ctx.globalAlpha = (1 - t) * 0.6;
-        ctx.lineWidth = (this.heavy ? 4 : 2.5) * (1 - t) + 0.5;
-        ctx.beginPath(); ctx.arc(this.x, this.y, (20 + 80 * easeOutQuad(t)) * (this.heavy ? 1.3 : 1), 0, Math.PI * 2); ctx.stroke();
-    }
-}
 
 /** Blue guard flash: a curved shield facing the attacker. */
 export class BlockSpark extends Effect {
@@ -221,22 +208,5 @@ export class Callout extends Effect {
         ctx.strokeText(this.text, 0, 0);
         ctx.fillStyle = this.color;
         ctx.fillText(this.text, 0, 0);
-    }
-}
-
-// ---------------------------------------------------------------------------- camera
-
-/** Screen shake with exponential decay. */
-export class Camera {
-    constructor() { this.shakeAmount = 0; }
-    shake(amount) { this.shakeAmount = Math.max(this.shakeAmount, amount); }
-    reset() { this.shakeAmount = 0; }
-    update() {
-        this.shakeAmount *= 0.85;
-        if (this.shakeAmount < 0.5) this.shakeAmount = 0;
-    }
-    apply(ctx) {
-        if (!this.shakeAmount) return;
-        ctx.translate((Math.random() - 0.5) * this.shakeAmount * 2, (Math.random() - 0.5) * this.shakeAmount * 2);
     }
 }

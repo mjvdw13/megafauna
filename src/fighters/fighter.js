@@ -8,13 +8,16 @@ import { DEFAULT_HURTBOXES, toWorldBox } from '../combat/hitbox.js';
 import { buildMoveset, selectMove } from '../combat/moveset.js';
 import { CharacterStateMachine } from '../combat/state-machine.js';
 import { CharacterStates as S } from '../combat/states.js';
-import { DEFENSE } from '../config.js';
+import { DEFENSE, INPUT_TIMING } from '../config.js';
 import { easeInOutQuad, easeOutBack, easeOutQuad } from '../core/math.js';
 import { blendPose, Puppet } from '../graphics/puppet.js';
 
 const THREAT_RANGE = 260;
 
 const AFTERIMAGE_COUNT = 5;
+// Presses remembered while the fighter is busy (input buffer, see INPUT_TIMING.buffer).
+const BUFFERED_ACTIONS = ['attack', 'smash', 'special', 'jump'];
+const ATTACK_ACTIONS = ['attack', 'smash', 'special'];
 const LAND_SQUASH_FRAMES = 8;
 
 /** Model poses used for each attack stance: neutral -> windup -> strike -> back to neutral. */
@@ -109,14 +112,18 @@ export class Fighter {
         this.burnTicks = 0;   // burn damage still to come (see BURN in config.js)
         this.burnTimer = 0;   // frames until the next tick
         this.input = null;
+        this.buffer = { attack: 0, smash: 0, special: 0, jump: 0 }; // frames left on each buffered press
         this.cancelAttack();
         // Presentation state
         this.events = [];
         this.trail = [];
         this.flashFrames = 0;
         this.flashKind = 'hit';
+        this.flashSerial = 0;   // counts flashes, so the 3-D view can start its own (real-time) flash on each new one
         this.landTimer = 0;
-        this.shakeFrames = 0;
+        this.shakeFrames = 0;   // hitstop shudder: frames left, of shakeTotal, at up to shakeAmp px
+        this.shakeTotal = 0;
+        this.shakeAmp = 0;
         this.attackFromPose = null;
         this.stateMachine = new CharacterStateMachine(this);
         this.onStateChange(S.IDLE);
@@ -147,6 +154,10 @@ export class Fighter {
 
     update(input, opponent) {
         this.input = input;
+        this.bufferPresses(input);
+        const raw = input;
+        input = this.withBuffer(input);
+        const eventCount = this.events.length;
         if (this.justLanded) {
             this.airJumpsLeft = this.airJumps;
             this.airDodgeUsed = false;
@@ -164,7 +175,41 @@ export class Fighter {
         if (opponent && this.stateMachine.canAct() && !this.stateMachine.is(S.RUNNING) && opponent.centerX !== this.centerX) {
             this.facingRight = this.centerX < opponent.centerX;
         }
+        this.consumeBuffer(raw, eventCount);
         this.updatePresentation();
+    }
+
+    // ------------------------------------------------------------------ input buffer
+    // A press that can't be used yet (mid-attack, in landing lag, during hitstop) is held for a few
+    // frames and comes out on the first frame the fighter can act, so combos don't drop inputs.
+
+    /** Remember this step's presses. The fight scene also calls this during hitstop. */
+    bufferPresses(input) {
+        for (const action of BUFFERED_ACTIONS) if (input[`${action}Pressed`]) this.buffer[action] = INPUT_TIMING.buffer;
+        if (input.shieldPressed) for (const action of ATTACK_ACTIONS) this.buffer[action] = 0;
+    }
+
+    /** The input with buffered presses replayed (the input itself when nothing is buffered). */
+    withBuffer(input) {
+        // Mashing out of dizziness counts real presses only.
+        if (this.stateMachine.is(S.DIZZY)) return input;
+        let out = input;
+        for (const action of BUFFERED_ACTIONS) {
+            const key = `${action}Pressed`;
+            if (this.buffer[action] > 0 && !input[key]) {
+                if (out === input) out = { ...input };
+                out[key] = true;
+            }
+        }
+        return out;
+    }
+
+    /** Clear presses that were used this step and age the rest. */
+    consumeBuffer(input, eventCount) {
+        const fresh = this.events.slice(eventCount);
+        if (this.chainQueued || fresh.some((e) => e.type === 'attackStart')) for (const action of ATTACK_ACTIONS) this.buffer[action] = 0;
+        if (fresh.some((e) => e.type === 'jump')) this.buffer.jump = 0;
+        for (const action of BUFFERED_ACTIONS) if (this.buffer[action] > 0) this.buffer[action]--;
     }
 
     /** Animation-only update, used while the round is over and fighters are posing. */
@@ -223,6 +268,7 @@ export class Fighter {
             this.damageScale = 1 + CHARGE.damage * k;
             this.knockbackScale = 1 + CHARGE.knockback * k;
             if (this.chargeFrames % 12 === 1) this.events.push({ type: 'charging', level: k });
+            if (this.chargeFrames === CHARGE.maxFrames) this.events.push({ type: 'chargeFull' });
             return;
         }
 
@@ -355,7 +401,7 @@ export class Fighter {
 
     takeDamage(amount) { this.health = Math.max(0, this.health - amount); }
     isDead() { return this.health <= 0; }
-    flash(frames, kind = 'hit') { this.flashFrames = frames; this.flashKind = kind; }
+    flash(frames, kind = 'hit') { this.flashFrames = frames; this.flashKind = kind; this.flashSerial++; }
 
     drainEvents() {
         const events = this.events;
@@ -441,11 +487,12 @@ export class Fighter {
         return pose;
     }
 
-    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow and flickering burn (around the edges). */
+    /**
+     * Emissive tint over the 3-D model: orange armor flash, golden charge glow and flickering burn (around the edges).
+     * The hit flash is timed by the 3-D view in real time (render3d/fighter-view.js), so it keeps flickering through hitstop.
+     */
     overlayTint() {
-        if (this.flashFrames > 0) {
-            return this.flashKind === 'armor' ? { color: '#ff9f43', alpha: 0.7 } : { color: '#ffffff', alpha: 0.85 };
-        }
+        if (this.flashFrames > 0 && this.flashKind === 'armor') return { color: '#ff9f43', alpha: 0.7 };
         if (this.chargeFrames > 0) return { color: '#ffb81f', alpha: 0.45 + 0.4 * Math.abs(Math.sin(this.chargeFrames * 0.35)), rim: true };
         if (this.burnTicks > 0) return { color: '#ff5a14', alpha: 0.5 + 0.3 * Math.abs(Math.sin(this.burnTimer * 0.9) * Math.sin(this.burnTimer * 0.37)), rim: true };
         return null;

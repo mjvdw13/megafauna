@@ -28,6 +28,10 @@ export class StageWorld {
         const kit = createWorldKit(this, view);
         stage.def.world(kit);
         kit.finish();
+        // Lights up fighters and ground for a moment on a hit (fight-view.js). It's built in, switched off,
+        // so shaders are compiled with it up front and the first hit doesn't stall to recompile them.
+        this.impactLight = new THREE.PointLight('#ffffff', 0, 6, 2);
+        this.scene.add(this.impactLight);
         this.time = 0;
     }
 

@@ -313,3 +313,37 @@ test('air attacks can be started while airborne', () => {
     a.handleAttackInput(input({ press: ['attack'], hold: ['down'] }));
     assert.equal(a.attackKey, 'dair');
 });
+
+// ---------------------------------------------------------------------------- input buffer
+
+test('an attack pressed a few frames before recovery ends comes out on the first free frame', () => {
+    const { a, match } = setup('riley', 'riley', 400);
+    run(match, 1, [input({ hold: ['right'], press: ['attack'] }), NEUTRAL_INPUT]); // forward tilt
+    assert.equal(a.attackKey, 'ftilt');
+    const total = a.currentAttack.getTotalFrames();
+    run(match, total - 4); // still recovering
+    run(match, 1, [input({ press: ['special'] }), NEUTRAL_INPUT]);
+    assert.equal(a.attackKey, 'ftilt', 'still busy when the button was pressed');
+    run(match, 6);
+    assert.equal(a.attackKey, 'neutralSpecial', 'the buffered press came out');
+});
+
+test('a buffered press expires after the buffer window', () => {
+    const { a, match } = setup('riley', 'riley', 400);
+    run(match, 1, [input({ hold: ['right'], press: ['attack'] }), NEUTRAL_INPUT]);
+    const total = a.currentAttack.getTotalFrames();
+    run(match, 1, [input({ press: ['special'] }), NEUTRAL_INPUT]); // far too early
+    run(match, total + 2);
+    assert.equal(a.currentAttack, null, 'nothing came out');
+});
+
+test('presses buffered during hitstop continue a jab combo', () => {
+    const { a, b, match } = setup('riley', 'riley', 90);
+    const events = run(match, 8, (i) => (i === 0 ? [input({ press: ['attack'] }), NEUTRAL_INPUT] : [NEUTRAL_INPUT, NEUTRAL_INPUT]));
+    assert.ok(events.some((e) => e.type === 'hit' && e.hit.attack.name === 'Paw Jab'), 'the first jab connected');
+    // The fight scene freezes the match on a hit; presses made during the freeze go to the buffer.
+    a.bufferPresses(input({ press: ['attack'] }));
+    const later = run(match, 12);
+    assert.ok(later.some((e) => e.type === 'hit' && e.hit.attack.name === 'Paw Jab 2'), 'the second jab came out and connected');
+    assert.equal(b.comboHitCount, 2);
+});

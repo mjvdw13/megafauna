@@ -10,21 +10,66 @@ const semitones = (n) => Math.pow(2, n / 12);
 export const SFX = {
     // ------------------------------------------------------------- impacts
 
-    /** opts: { damage, heavy, combo } */
-    hit: (v, { damage = 6, heavy = false, combo = 1 } = {}) => {
+    /**
+     * opts: { damage, heavy, combo, tier, counter }
+     * tier: 1 light, 2 heavy, 3 smash (see impactTier in scenes/fight-scene.js). Bigger tiers add a sub-bass
+     * boom and a crunchy tail; `counter` adds a bright metallic ring for hitting a move as it came out.
+     */
+    hit: (v, { damage = 6, heavy = false, combo = 1, tier = heavy ? 2 : 1, counter = false } = {}) => {
         const weight = Math.min(1, damage / 20);
         // Body thump
-        v.tone({ freq: heavy ? 150 : 190, to: heavy ? 42 : 60, dur: heavy ? 0.28 : 0.15, gain: 0.7 + weight * 0.3 });
+        v.tone({ freq: tier >= 2 ? 150 : 190, to: tier >= 2 ? 42 : 60, dur: tier >= 2 ? 0.28 : 0.15, gain: 0.7 + weight * 0.3 });
         // Smack
-        v.noise({ dur: heavy ? 0.16 : 0.08, gain: 0.55, filter: { type: 'bandpass', freq: heavy ? 1400 : 2200, to: 500, Q: 0.9 } });
+        v.noise({ dur: tier >= 2 ? 0.16 : 0.08, gain: 0.55, filter: { type: 'bandpass', freq: tier >= 2 ? 1400 : 2200, to: 500, Q: 0.9 } });
         // Crack on top, brighter for light hits
-        v.tone({ type: 'square', freq: heavy ? 520 : 900, to: 140, dur: 0.05, gain: 0.12 });
-        if (heavy) v.noise({ dur: 0.35, gain: 0.25, delay: 0.02, filter: { type: 'lowpass', freq: 700, to: 120 } });
+        v.tone({ type: 'square', freq: tier >= 2 ? 520 : 900, to: 140, dur: 0.05, gain: 0.12 });
+        if (tier >= 2) v.noise({ dur: 0.35, gain: 0.25, delay: 0.02, filter: { type: 'lowpass', freq: 700, to: 120 } });
+        if (tier >= 3) {
+            // Smash: a chest-thumping boom under a splintering crunch
+            v.tone({ freq: 70, to: 30, dur: 0.6, gain: 0.9 });
+            v.noise({ dur: 0.09, gain: 0.5, filter: { type: 'highpass', freq: 2800 } });
+            v.noise({ dur: 0.7, gain: 0.22, delay: 0.04, filter: { type: 'bandpass', freq: 900, to: 200, Q: 0.7 } });
+            v.tone({ type: 'sawtooth', freq: 110, to: 45, dur: 0.3, gain: 0.16, filter: { type: 'lowpass', freq: 900 } });
+        }
+        if (counter) {
+            v.tone({ type: 'triangle', freq: 1760, to: 1700, dur: 0.35, gain: 0.12, delay: 0.01 });
+            v.tone({ type: 'triangle', freq: 2637, dur: 0.25, gain: 0.07, delay: 0.01 });
+        }
         // Combo chime climbs a step with every extra hit
         if (combo >= 2) {
             const step = Math.min(combo - 2, 10);
             v.tone({ type: 'triangle', freq: 660 * semitones(step * 2), dur: 0.18, gain: 0.14, delay: 0.03 });
         }
+    },
+
+    /** The hit that ends the round: everything at once, then a long rumble. */
+    kohit: (v) => {
+        v.tone({ freq: 60, to: 22, dur: 1.8, gain: 1 });
+        v.noise({ dur: 0.12, gain: 0.7, filter: { type: 'highpass', freq: 2000 } });
+        v.noise({ dur: 1.4, gain: 0.4, filter: { type: 'lowpass', freq: 1800, to: 80 } });
+        v.tone({ type: 'sawtooth', freq: 140, to: 40, dur: 0.5, gain: 0.25, filter: { type: 'lowpass', freq: 1200 } });
+        for (const [freq, gain] of [[523, 0.08], [784, 0.06], [1046, 0.05]]) v.tone({ type: 'triangle', freq, to: freq * 0.5, dur: 1.2, gain, delay: 0.02 });
+    },
+
+    /** Combo finished: a rising sting, longer and brighter for better combos (level 1-4). */
+    combo: (v, { level = 1 } = {}) => {
+        const notes = [[0, 4, 7], [0, 4, 7, 12], [0, 4, 7, 12, 16], [0, 4, 7, 12, 16, 19, 24]][Math.min(3, level - 1)];
+        notes.forEach((n, i) => v.tone({ type: 'square', freq: 523 * semitones(n), dur: 0.09, gain: 0.07, delay: i * 0.045, filter: { type: 'lowpass', freq: 3200 } }));
+        const top = notes[notes.length - 1];
+        v.tone({ type: 'triangle', freq: 523 * semitones(top), dur: 0.5, gain: 0.1, attack: 0.01, delay: notes.length * 0.045 });
+    },
+
+    /** A fighter sent flying: air tearing past. */
+    launch: (v, { power = 1 } = {}) => {
+        v.noise({ dur: 0.45 + 0.2 * power, gain: 0.3, attack: 0.02, filter: { type: 'bandpass', points: [[0, 2600], [0.5, 500]], Q: 1.8 } });
+        v.tone({ type: 'triangle', freq: 1400, to: 350, dur: 0.5, gain: 0.05 });
+    },
+
+    /** A smash attack reaches full charge. */
+    chargefull: (v) => {
+        v.tone({ type: 'triangle', freq: 1568, dur: 0.18, gain: 0.12 });
+        v.tone({ type: 'triangle', freq: 2093, dur: 0.3, gain: 0.1, delay: 0.06 });
+        v.noise({ dur: 0.15, gain: 0.12, filter: { type: 'highpass', freq: 5000 } });
     },
 
     block: (v) => {

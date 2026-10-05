@@ -108,7 +108,28 @@ Fighters and stages are realistic real-time 3-D, generated entirely in code: the
 
 **Menus** use `render3d/studio.js` (full-body character cards, HUD and roster portraits) and `render3d/actor.js` (the title-screen line-up on the meadow).
 
-**2-D on top:** `graphics/effects.js` and `graphics/attack-vfx.js` draw impact flashes, glowing particles, dust and swing trails over the 3-D picture. `graphics/ink.js` and `graphics/paper.js` give the menus their hand-drawn panels and paper grain (the fight, title and stage select skip the paper).
+**2-D on top:** `graphics/effects.js` and `graphics/attack-vfx.js` draw glowing particles, dust and swing trails over the 3-D picture, and `graphics/impacts.js` the hit effects (impact stars, focus lines, shockwaves, sparks, launch smoke). `graphics/ink.js` and `graphics/paper.js` give the menus their hand-drawn panels and paper grain (the fight, title and stage select skip the paper).
+
+**Fight camera** (`graphics/camera.js`): shake, roll, a kick along each hit's knockback, zoom punches and the KO close-up. It works as a view window onto the playfield: the 3-D camera renders exactly that window (`setViewOffset`) and the 2-D layers get the matching transform, so effects stay on the fighters while the picture moves, and shaking never shows an edge.
+
+## Hit feel
+
+How hard a clean hit lands decides how it's presented. `impactTier()` in `scenes/fight-scene.js` sorts it into light, heavy or smash (by the move's strength and damage), and `HIT_TIERS` there sets, per tier:
+
+- **Hitstop:** the whole fight freezes for a few frames (more for more damage, capped at 20), while the defender shudders and the effects keep playing. A move's own `hitstop` is the minimum.
+- **Camera:** shake, a kick along the knockback, and a zoom punch toward the impact on heavy and smash hits.
+- **Light:** each world has an impact point light (`render3d/stage-world.js`, built in at startup so no shader recompiles mid-fight) that flashes at the point of contact and lights up both fighters and the floor.
+- **Effects:** an impact star and sparks flying along the knockback; smash hits add focus lines, a shockwave and a darkened frame; heavy hits on the ground send a flattened shockwave and debris along it. Fighters launched hard trail smoke; fighters sliding in hitstun kick up dust.
+- **Defender:** a white-hot flash then a flickering red glow (timed in real time by `render3d/fighter-view.js`, so it plays during hitstop).
+- **Sound:** smash hits add a sub-bass boom and crunch; counter hits ring; launches whoosh.
+
+Hitting a move as it comes out shows **COUNTER HIT!** (with extra hitstop), hitting one while it recovers shows **PUNISH!**. These only change the presentation, not damage.
+
+**Combos:** the HUD counter pops on every hit, heats up from yellow to pink, and totals the combo's damage; when a combo of 3+ hits ends it's rated NICE! / GREAT! / AWESOME! / MEGA! with a sting. Health bars shake when hit, flash the chunk just lost, and throb at low health.
+
+**Knockouts:** the winning hit freezes for 40 frames while the camera closes in on the impact, then lets go into slow motion behind letterbox bars as the K.O. slams down.
+
+**Input buffer:** attack, smash, special and jump pressed while the fighter is busy (recovering, landing, in hitstun, or during hitstop) are remembered for `INPUT_TIMING.buffer` frames and come out on the first frame they can, so combos don't drop inputs. This lives in `Fighter` (`bufferPresses` / `withBuffer`), so the CPU and the tests use it too.
 
 ## Adding a character
 

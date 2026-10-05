@@ -58,7 +58,8 @@ export const DEFENSE = Object.freeze({
 // Input timing (frames).
 export const INPUT_TIMING = Object.freeze({
     tapJumpGrace: 3,   // up waits this long for an attack/special before it becomes a jump
-    doubleTap: 12      // two taps of a direction within this many frames = run
+    doubleTap: 12,     // two taps of a direction within this many frames = run
+    buffer: 6          // attack/smash/special/jump pressed while busy comes out if you can act within this many frames
 });
 
 // Key bindings. Each action accepts several keys so laptops without a numpad can play.

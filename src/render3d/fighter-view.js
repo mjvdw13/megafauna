@@ -16,6 +16,11 @@ const PX = 0.01;          // world units per screen pixel
 const TURN = 0.35;        // fighters turn this far toward the camera (a three-quarter view)
 const GHOSTS = 3;         // afterimages drawn for fast moves
 const GHOST_DEPTH = 0.5;  // afterimages sit this far behind the fighter so they trail it instead of washing over it
+// Hit flash, in seconds (real time, so it plays out during hitstop): white-hot, then a flickering red glow.
+const FLASH_WHITE = 0.05;
+const FLASH_GLOW = 0.2;
+const FLASH_GLOW_COLOR = '#ff4a1c';  // reads on white Quackers as well as dark Dad
+const SHIELD_PULSE = 0.18;
 
 export const facingYaw = (right) => (right ? -TURN : -(Math.PI - TURN));
 
@@ -50,7 +55,31 @@ export class FighterView {
         const starMat = new THREE.MeshBasicMaterial({ color: '#ffe14d' });
         for (let i = 0; i < 3; i++) this.stars.add(new THREE.Mesh(starGeometry, starMat));
         this.ghosts = [];
+        this.flashSerial = fighter.flashSerial;
+        this.flashAge = Infinity;
+        this.shieldPulse = Infinity;
         world.scene.add(this.holder, this.shield, this.stars);
+    }
+
+    shieldHit() { this.shieldPulse = 0; }
+
+    /** The hit flash for this frame, or null. */
+    hitFlash(dt) {
+        const f = this.fighter;
+        if (f.flashSerial !== this.flashSerial) {
+            this.flashSerial = f.flashSerial;
+            if (f.flashKind === 'hit') this.flashAge = 0;
+        } else {
+            this.flashAge += dt;
+        }
+        const t = this.flashAge;
+        if (t < FLASH_WHITE) return { color: '#ffffff', alpha: 1.1 };
+        if (t < FLASH_WHITE + FLASH_GLOW) {
+            const k = 1 - (t - FLASH_WHITE) / FLASH_GLOW;
+            const on = Math.floor(t / 0.034) % 2 === 0;
+            return { color: FLASH_GLOW_COLOR, alpha: (on ? 0.9 : 0.45) * k, rim: true };
+        }
+        return null;
     }
 
     dispose() {
@@ -86,9 +115,15 @@ export class FighterView {
         const attack = f.currentAttack;
         if (attack?.anim.spin && attack.phaseAt(f.attackFrame) === AttackPhase.ACTIVE) yaw += f.attackFrame * (Math.PI / 4);
         this.place(this.instance, this.holder, this.yawNode, { x: f.x, y: f.y, facingRight: f.facingRight, pose, transform }, yaw, dt);
-        if (f.shakeFrames > 0) this.holder.position.x += (Math.random() - 0.5) * 0.06;
+        if (f.shakeFrames > 0) {
+            // Hitstop shudder: violent at first, settling as the freeze runs out.
+            const k = f.shakeFrames / Math.max(1, f.shakeTotal || f.shakeFrames);
+            const amp = (f.shakeAmp || 3) * k * PX;
+            this.holder.position.x += (Math.random() - 0.5) * 2 * amp;
+            this.holder.position.y += (Math.random() - 0.5) * 0.8 * amp;
+        }
 
-        const tint = f.overlayTint();
+        const tint = this.hitFlash(dt) || f.overlayTint();
         this.instance.setTint(tint?.color ?? null, tint ? tint.alpha * 1.2 : 0, tint?.rim);
         const blinking = (f.invincible || f.invulnTimer > 0) && Math.floor(sm.stateTime / 3) % 2 === 0;
         this.instance.setOpacity((transform.alpha ?? 1) * (blinking ? 0.55 : 1));
@@ -97,8 +132,11 @@ export class FighterView {
             const s = Math.max(0.15, f.shieldHP / DEFENSE.shieldMax);
             const r = Math.max(f.width, f.height) * 0.62 * (0.55 + 0.45 * s) * PX;
             this.shield.position.set(this.world.toWorldX(f.centerX), this.world.toWorldY(f.y + f.height * 0.55), 0);
-            this.shield.scale.setScalar(r);
-            this.shield.material.opacity = 0.26 + 0.08 * Math.sin(sm.stateTime * 0.3);
+            this.shieldPulse += dt;
+            const pulse = Math.max(0, 1 - this.shieldPulse / SHIELD_PULSE);
+            this.shield.scale.setScalar(r * (1 + 0.12 * pulse));
+            this.shield.material.opacity = 0.26 + 0.08 * Math.sin(sm.stateTime * 0.3) + 0.4 * pulse;
+            this.shield.material.emissiveIntensity = 0.35 + 2.5 * pulse;
         }
         if (this.stars.visible) {
             const t = sm.stateTime * 0.12;
