@@ -125,7 +125,7 @@ Fighters and stages are realistic real-time 3-D, generated entirely in code: the
    - **Optional state poses** fall back to a core pose when missing (see `STATE_POSES` in `fighters/fighter.js`): `running` (else a sped-up `walking`), `shield` (else `blocking`), `ledge`, `helpless`, `glide`, `dizzy`, and others.
 2. Create `src/fighters/<id>/<id>.js` exporting the definition with `model: <yourModel>`. The fields are commented in the existing ones.
 3. Add it to `ROSTER` in `src/fighters/roster.js`.
-   - Add `secret: true` to the definition to hide the character until it's unlocked. The unlock code lives in `SECRET` in `src/scenes/character-select-scene.js`, and unlocks are remembered by the browser (`src/core/unlocks.js`).
+   - Add `secret: true` to the definition to hide the character until it's unlocked. The unlock code lives in `SECRET` in `src/scenes/character-select-scene.js`, and an unlock lasts until the page is refreshed or closed (`src/core/unlocks.js`).
 4. Run `npm test`. Tests check that the character defines every move slot with its own move names, can recover (an up special that rises), and doesn't share a value with anyone for any displayed stat. For the model, they check that every required pose and every pose a move names exists, that shapes, feet and poses only name bones, colors and parameters that exist, and that every pose drives the skeleton to finite angles.
 5. Look at it in the game. Hold a pose in the browser console with `game.scene.view3d.fighters[0].fighter.puppet.play('ledge')` while the round is in its intro, or step through moves with the hitbox overlay on (`` ` ``).
 

@@ -1,17 +1,13 @@
 // ============================================================================
 // UNLOCKS
-// Secret characters, and the button codes that reveal them. Unlocks are
-// remembered in this browser (localStorage); if storage isn't available they
-// last until the page is closed.
+// Secret characters, and the button codes that reveal them. Unlocks last only
+// while the page is open: refreshing or closing the tab locks them again.
 // ============================================================================
 
-const STORAGE_KEY = 'megafauna.unlocked';
+// Earlier versions remembered unlocks in localStorage; forget them.
+try { globalThis.localStorage?.removeItem('megafauna.unlocked'); } catch { /* storage unavailable */ }
 
-function load() {
-    try { return JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-}
-
-const unlocked = new Set(load());
+const unlocked = new Set();
 
 export function isUnlocked(id) { return unlocked.has(id); }
 
@@ -19,15 +15,11 @@ export function isUnlocked(id) { return unlocked.has(id); }
 export function unlock(id) {
     if (unlocked.has(id)) return false;
     unlocked.add(id);
-    try { globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...unlocked])); } catch { /* storage unavailable */ }
     return true;
 }
 
 /** Forget an unlock (used by tests). */
-export function relock(id) {
-    unlocked.delete(id);
-    try { globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...unlocked])); } catch { /* storage unavailable */ }
-}
+export function relock(id) { unlocked.delete(id); }
 
 const DIRECTIONS = ['up', 'down', 'left', 'right'];
 
