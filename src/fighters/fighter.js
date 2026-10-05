@@ -439,12 +439,12 @@ export class Fighter {
         return pose;
     }
 
-    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow. */
+    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow (around the edges). */
     overlayTint() {
         if (this.flashFrames > 0) {
             return this.flashKind === 'armor' ? { color: '#ff9f43', alpha: 0.7 } : { color: '#ffffff', alpha: 0.85 };
         }
-        if (this.chargeFrames > 0) return { color: '#fff3a8', alpha: 0.2 + 0.25 * Math.abs(Math.sin(this.chargeFrames * 0.35)) };
+        if (this.chargeFrames > 0) return { color: '#ffb81f', alpha: 0.45 + 0.4 * Math.abs(Math.sin(this.chargeFrames * 0.35)), rim: true };
         return null;
     }
 

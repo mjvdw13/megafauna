@@ -218,26 +218,44 @@ export function createInstance(template) {
     const root = SkeletonUtils.clone(template.root);
     const scaleNode = root.children[0];
     const bones = {}, extras = {}, materials = new Map(), meshes = [];
+    const rim = { value: new THREE.Color(0, 0, 0) };
     root.traverse((o) => {
         if (o.isBone) bones[o.name] = o;
         else if (o.name) extras[o.name] = o;
         if (o.isMesh) {
-            if (!materials.has(o.material)) materials.set(o.material, cloneMaterial(o.material));
+            if (!materials.has(o.material)) materials.set(o.material, withRim(cloneMaterial(o.material), rim));
             o.material = materials.get(o.material);
             meshes.push(o);
         }
     });
-    return new CreatureInstance(template, root, scaleNode, bones, extras, [...materials.values()], meshes);
+    return new CreatureInstance(template, root, scaleNode, bones, extras, [...materials.values()], meshes, rim);
+}
+
+/** Add a glow around the model's edges (strongest where the surface turns away from the camera). */
+function withRim(material, rim) {
+    const base = material.onBeforeCompile, baseKey = material.customProgramCacheKey.bind(material);
+    material.onBeforeCompile = (sh, renderer) => {
+        base.call(material, sh, renderer);
+        sh.uniforms.uRim = rim;
+        sh.fragmentShader = sh.fragmentShader
+            .replace('#include <common>', '#include <common>\nuniform vec3 uRim;')
+            .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                totalEmissiveRadiance += uRim * pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);`);
+    };
+    material.customProgramCacheKey = () => `${baseKey()}-rim`;
+    return material;
 }
 
 const tmp = new THREE.Vector3();
+const DEPTH_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 
 export class CreatureInstance {
-    constructor(template, root, scaleNode, bones, extras, materials, meshes) {
-        Object.assign(this, { template, def: template.def, root, scaleNode, bones, extras, materials, meshes });
+    constructor(template, root, scaleNode, bones, extras, materials, meshes, rim) {
+        Object.assign(this, { template, def: template.def, root, scaleNode, bones, extras, materials, meshes, rim });
         this.state = {};       // per-instance memory for apply() (tie swing, etc.)
         this.rest = Object.fromEntries(Object.entries(bones).map(([k, b]) => [k, b.position.clone()]));
         this.tint = null;
+        this.twins = null;
     }
 
     /**
@@ -261,17 +279,24 @@ export class CreatureInstance {
         }
     }
 
-    /** Emissive overlay (hit flash, charge glow) or null to clear. */
-    setTint(color, amount) {
-        const key = color ? `${color}:${amount.toFixed(2)}` : null;
+    /** Emissive overlay (hit flash) or, with `rim`, a glow around the edges (charge); null to clear. */
+    setTint(color, amount, rim = false) {
+        const key = color ? `${color}:${amount.toFixed(2)}:${rim}` : null;
         if (key === this.tint) return;
         this.tint = key;
+        const flat = rim ? amount * 0.06 : amount;
         for (const m of this.materials) {
-            if (color) { m.emissive.set(color); m.emissiveIntensity = amount; } else { m.emissive.setRGB(0, 0, 0); m.emissiveIntensity = 1; }
+            if (color) { m.emissive.set(color); m.emissiveIntensity = flat; } else { m.emissive.setRGB(0, 0, 0); m.emissiveIntensity = 1; }
         }
+        if (color && rim) this.rim.value.set(color).multiplyScalar(amount * 2.2);
+        else this.rim.value.setRGB(0, 0, 0);
     }
 
-    /** Fade the whole model (dodges). Materials that are see-through already (lenses) stay relative. */
+    /**
+     * Fade the whole model (dodges). Materials that are see-through already (lenses) stay relative.
+     * While faded, depth-only copies drawn first keep the hidden far side (the other arm, the
+     * inside of the body) from showing through.
+     */
     setOpacity(alpha) {
         if (this.alpha === alpha) return;
         this.alpha = alpha;
@@ -281,5 +306,22 @@ export class CreatureInstance {
             if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
             m.opacity = m.userData.baseOpacity * alpha;
         }
+        const faded = alpha < 0.999;
+        if (faded && !this.twins) this.twins = this.meshes.filter((m) => !m.material.userData.baseTransparent).map(depthTwin);
+        for (const t of this.twins || []) t.visible = faded;
     }
+}
+
+/** A depth-only copy of a mesh in the same place (and, if skinned, on the same skeleton). */
+function depthTwin(mesh) {
+    const twin = mesh.isSkinnedMesh ? new THREE.SkinnedMesh(mesh.geometry, DEPTH_ONLY) : new THREE.Mesh(mesh.geometry, DEPTH_ONLY);
+    if (mesh.isSkinnedMesh) twin.bind(mesh.skeleton, mesh.bindMatrix);
+    twin.position.copy(mesh.position);
+    twin.quaternion.copy(mesh.quaternion);
+    twin.scale.copy(mesh.scale);
+    twin.frustumCulled = mesh.frustumCulled;
+    twin.castShadow = twin.receiveShadow = false;
+    twin.renderOrder = 3; // after everything opaque (or it would hide the scenery behind the faded body), before anything see-through
+    mesh.parent.add(twin);
+    return twin;
 }

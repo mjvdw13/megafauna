@@ -15,6 +15,7 @@ import { getTemplate } from './models.js';
 const PX = 0.01;          // world units per screen pixel
 const TURN = 0.35;        // fighters turn this far toward the camera (a three-quarter view)
 const GHOSTS = 3;         // afterimages drawn for fast moves
+const GHOST_DEPTH = 0.5;  // afterimages sit this far behind the fighter so they trail it instead of washing over it
 
 export const facingYaw = (right) => (right ? -TURN : -(Math.PI - TURN));
 
@@ -88,7 +89,7 @@ export class FighterView {
         if (f.shakeFrames > 0) this.holder.position.x += (Math.random() - 0.5) * 0.06;
 
         const tint = f.overlayTint();
-        this.instance.setTint(tint?.color ?? null, tint ? tint.alpha * 1.2 : 0);
+        this.instance.setTint(tint?.color ?? null, tint ? tint.alpha * 1.2 : 0, tint?.rim);
         const blinking = (f.invincible || f.invulnTimer > 0) && Math.floor(sm.stateTime / 3) % 2 === 0;
         this.instance.setOpacity((transform.alpha ?? 1) * (blinking ? 0.55 : 1));
 
@@ -122,7 +123,15 @@ export class FighterView {
             const snap = trail[i];
             g.material.opacity = 0.12 + 0.08 * i;
             this.place(g.instance, g.holder, g.yawNode, snap, facingYaw(snap.facingRight), dt);
+            this.pushBack(g.holder, GHOST_DEPTH + 0.05 * (count - 1 - i));
         });
+    }
+
+    /** Move a placed model away from the camera, scaled so it still covers the same pixels. */
+    pushBack(holder, depth) {
+        const cam = this.world.camera.position, k = (cam.z + depth) / cam.z;
+        holder.position.set(cam.x + (holder.position.x - cam.x) * k, cam.y + (holder.position.y - cam.y) * k, -depth);
+        holder.scale.setScalar(k);
     }
 
     makeGhost() {

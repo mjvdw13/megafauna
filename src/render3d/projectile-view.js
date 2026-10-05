@@ -27,6 +27,25 @@ function soft() {
     return softTexture;
 }
 
+/** A rounder smoke puff than soft(): solid in the middle with a short falloff, so puffs keep their shape. */
+let puffTexture = null;
+function puff() {
+    if (!puffTexture) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 64;
+        const g = c.getContext('2d');
+        const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gr.addColorStop(0, 'rgba(255,255,255,1)');
+        gr.addColorStop(0.55, 'rgba(255,255,255,0.8)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, 64, 64);
+        puffTexture = new THREE.CanvasTexture(c);
+        puffTexture.colorSpace = THREE.SRGBColorSpace;
+    }
+    return puffTexture;
+}
+
 const BUILD = {
     bark(p) {
         const g = new THREE.Group();
@@ -58,10 +77,14 @@ const BUILD = {
         return m;
     },
     breath() {
+        // Separate puffs in a sickly yellow-green that stands out from foliage, darker olive ones for body.
+        const colors = ['#c9d24a', '#7f8c26', '#dfe37a', '#9fac34'];
         const g = new THREE.Group();
-        for (let i = 0; i < 6; i++) {
-            const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: soft(), color: i % 2 ? '#a8c95a' : '#7f9f3a', transparent: true, opacity: 0.55, depthWrite: false }));
-            s.userData.offset = [Math.cos(i * 1.1) * 0.25, Math.sin(i * 1.7) * 0.18, Math.sin(i * 0.9) * 0.2];
+        for (let i = 0; i < 11; i++) {
+            const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff(), color: colors[i % colors.length], transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
+            const a = i * 2.4, r = i === 0 ? 0 : 0.25 + (i % 3) * 0.12;
+            s.userData.offset = [Math.cos(a) * r, Math.sin(a) * r * 0.7, Math.sin(i * 0.9) * 0.2];
+            s.userData.size = 0.38 + ((i * 7) % 5) * 0.06;
             g.add(s);
         }
         return g;
@@ -102,11 +125,13 @@ export class ProjectileViews {
                 obj.scale.setScalar(p.width * PX * 0.5);
                 obj.rotation.z = -(p.centerX * PX) / (p.width * PX * 0.5);
             } else if (p.kind === 'breath') {
+                // Puffs billow outward and bob as the cloud drifts.
+                const size = p.width * PX, spread = 1 + Math.min(1, p.age / p.life) * 0.35;
                 obj.children.forEach((s, i) => {
-                    const [ox, oy, oz] = s.userData.offset, size = p.width * PX;
-                    s.position.set(ox * size + Math.sin(time * 2 + i) * 0.04, oy * size, oz * size);
-                    s.scale.setScalar(size * (0.7 + (i % 3) * 0.2));
-                    s.material.opacity = 0.55 * fade;
+                    const [ox, oy, oz] = s.userData.offset;
+                    s.position.set(ox * size * spread + Math.sin(time * 2 + i) * 0.03, oy * size * spread + Math.sin(time * 2.6 + i * 1.3) * 0.025, oz * size);
+                    s.scale.setScalar(size * s.userData.size * (1 + 0.08 * Math.sin(time * 3 + i)));
+                    s.material.opacity = 0.85 * Math.min(1, fade * 2);
                 });
             }
         }

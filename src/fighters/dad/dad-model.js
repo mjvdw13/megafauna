@@ -142,7 +142,7 @@ export const dadModel = {
         chest_pound: CHEST_BEAT,
         breath_windup: { pitch: 0.4, neck: 0.3, head: 0.3, puff: 0.12, jaw: 0.1 },
         breath: { pitch: 0.25, neck: -0.1, head: -0.2, jaw: 0.9 },
-        tie_whip: { pitch: 0.35, yaw: -0.4, aLs: 1.5, aLe: 0.6, tieSwing: -1.6 },
+        tie_whip: { pitch: 0.35, yaw: -0.4, aLs: 1.5, aLe: 0.6, tieSwing: 1.6 },
         kick: { pitch: -0.35, hLh: -1.2, hLk: 0.2, ...arms(0.3, 0) },
         cannonball: { pitch: 0.2, ...arms(1.0, 1.6), ...legs(1.2, -1.6), neck: -0.3 },
         grab: { pitch: 0.45, aLs: 1.4, aLe: 0.8, aLx: -0.4, aRs: 1.4, aRe: 0.8, aRx: -0.4 },
@@ -172,12 +172,17 @@ export const dadModel = {
             B['ankle' + S].rotation.z = -(hip + knee);
         }
         // The tie: a damped pendulum driven by Dad's acceleration, hanging plumb whatever his pitch.
+        // A pose's tieSwing (the Tie Whip) yanks it much harder, so it snaps out within a few frames.
+        // It can't swing far back: his belly is in the way.
         const tie = state.tie || (state.tie = { a: 0, v: 0, b: 0, bv: 0, vx: 0 });
         const dt = Math.min(info.dt, 1 / 30);
         const accel = ((info.motion[0] - tie.vx) / Math.max(info.dt, 1e-3)) * 0.0006;
         tie.vx = info.motion[0];
-        tie.v += (-(tie.a - p.tieSwing) * 30 - tie.v * 3.5 - accel * 60) * dt;
-        tie.a = clamp(tie.a + tie.v * dt, -1.8, 1.2);
+        const yank = Math.min(1, Math.abs(p.tieSwing));
+        tie.v += (-(tie.a - p.tieSwing) * (30 + 370 * yank) - tie.v * (3.5 + 16 * yank) - accel * 60) * dt;
+        const swung = tie.a + tie.v * dt;
+        tie.a = clamp(swung, -0.4, 1.8);
+        if (tie.a !== swung) tie.v = 0;
         tie.bv += (-(tie.b - tie.a) * 40 - tie.bv * 4) * dt;
         tie.b += tie.bv * dt;
         extras.tieUpper.rotation.z = tie.a - p.pitch;
