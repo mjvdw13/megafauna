@@ -5,6 +5,7 @@
 // ============================================================================
 import { easeOutQuad } from '../core/math.js';
 import { Callout, dustPuff, Effect, burst, RingPulse } from './effects.js';
+import { fireBlast, firePuff, fireRing, flameJet, phoenixAura } from './fire.js';
 
 /** An effect positioned at the attack's hitbox, following its owner and mirrored by facing. */
 class AttachedEffect extends Effect {
@@ -204,6 +205,25 @@ export const ATTACK_VFX = {
     charge: (owner, attack, { effects, groundY }) => {
         effects.add(new DustTrail(owner, attack, effects, groundY));
         effects.add(new SlashArc(owner, attack, { radius: 40, thickness: 12, span: 0.9, life: attack.active, lines: 4 }));
+    },
+    // ---- Fire (Gary)
+    firepuff: (owner, attack, { effects }) => {
+        effects.add(firePuff(owner, attack));
+    },
+    fireblast: (owner, attack, { effects, camera }) => {
+        effects.add(fireBlast(owner, attack));
+        camera.shake(6);
+    },
+    flamethrower: (owner, attack, { effects }) => {
+        effects.add(flameJet(owner, attack));
+    },
+    firering: (owner, attack, { effects, camera, groundY }) => {
+        effects.add(fireRing(owner, attack, groundY));
+        effects.add(new Shockwave(owner, groundY, { reach: attack.hitbox.width / 2 - 20, life: 16 }));
+        camera.shake(7);
+    },
+    phoenix: (owner, attack, { effects }) => {
+        effects.add(phoenixAura(owner, attack));
     }
 };
 

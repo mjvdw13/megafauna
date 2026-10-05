@@ -35,6 +35,10 @@ export const RING_OUT = Object.freeze({
     respawnInvincible: 120  // frames of invincibility after respawning
 });
 
+// Burning (Gary's fire moves): 1 damage every `interval` frames, for as many ticks as the move's `burn`.
+// A new burn doesn't stack: the fighter burns for whichever is longer, up to maxTicks.
+export const BURN = Object.freeze({ interval: 20, maxTicks: 6 });
+
 // Shield, dodges, ledges, grabs. Frame counts are at 60 fps.
 export const DEFENSE = Object.freeze({
     shieldMax: 50,

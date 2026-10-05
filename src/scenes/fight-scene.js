@@ -16,6 +16,7 @@ import { Fighter } from '../fighters/fighter.js';
 import { getCharacter } from '../fighters/roster.js';
 import { spawnAttackStartVfx, spawnAttackVfx } from '../graphics/attack-vfx.js';
 import { BlockSpark, burst, Callout, Camera, dustPuff, EffectsManager, HitSpark, RingPulse } from '../graphics/effects.js';
+import { burningFlames, fireBurst } from '../graphics/fire.js';
 import { projectileEndEffect } from '../graphics/projectile-effects.js';
 import { FightView } from '../render3d/fight-view.js';
 import { getStage } from '../stages/index.js';
@@ -129,6 +130,8 @@ export class FightScene {
         // Burrowing fighters leave a trail of churned-up dirt.
         for (const f of this.fighters) {
             if (f.isHidden() && this.stage.time % 4 === 0) this.effects.add(dustPuff(f.centerX, f.feetY, { count: 3, spread: 30, size: [10, 16], color: 'rgba(120,90,60,0.9)' }));
+            // Burning fighters trail flames.
+            if (f.burnTicks > 0 && !f.isHidden() && this.stage.time % 2 === 0) this.effects.add(burningFlames(f));
         }
 
         const tense = this.isFinalRound() || this.fighters.some((f) => f.health / f.maxHealth < TENSE_HEALTH);
@@ -175,6 +178,17 @@ export class FightScene {
             case 'ringOut': return this.onRingOut(event);
             case 'grabEscape':
                 this.audio.play('menu-back', { x: event.fighter.centerX });
+                return;
+            case 'burn': {
+                const f = event.fighter;
+                this.effects.add(fireBurst(f.centerX, f.y + f.height * 0.5, { count: 5, speed: [1, 3], size: [12, 20], life: [10, 18], offset: f.width * 0.25 }));
+                this.audio.play('crackle', { x: f.centerX });
+                return;
+            }
+            case 'douse':
+                this.effects.add(burst(event.x, event.y - 20, { count: 14, colors: ['rgba(240,240,240,0.8)', 'rgba(200,205,210,0.7)'], speed: [1, 4], size: [16, 28], angle: -Math.PI / 2, spread: 1.2, gravity: -0.08, drag: 0.95, shrink: 1.02, life: [26, 40] }));
+                this.effects.add(new Callout(event.x, event.y - 100, 'PSSSH!', { color: '#d6eaf8', size: 26 }));
+                this.audio.play('sizzle', { x: event.x });
                 return;
             default:
         }
@@ -242,6 +256,10 @@ export class FightScene {
         }
         if (hit.thrown) this.audio.play('whoosh', { x, strength: 'heavy' });
         if (hit.dizzy) this.effects.add(new Callout(defender.centerX, defender.y - 30, 'P-U!', { color: '#9ccc4a', size: 30 }));
+        if (hit.ignited) {
+            this.effects.add(new Callout(defender.centerX, defender.y - 30, 'BURN!', { color: '#ff7a1a', size: 30 }));
+            this.effects.add(fireBurst(defender.centerX, defender.y + defender.height * 0.5, { count: 14, speed: [2, 6], size: [14, 26], offset: defender.width * 0.3 }));
+        }
     }
 
     onFighterEvent(fighter, event) {
@@ -327,6 +345,7 @@ export class FightScene {
         this.audio.music.duck(true);
         for (const [me, other] of [[p1, p2], [p2, p1]]) {
             me.cancelAttack();
+            me.burnTicks = 0;
             if (me.holding) { me.holding.heldBy = null; me.holding.stateMachine.stateData.released = true; me.holding = null; }
             const lost = me.isDead() || (!knockout && me.health < other.health);
             if (this.koReason !== 'draw') me.stateMachine.setState(lost ? S.DEFEAT : S.VICTORY);

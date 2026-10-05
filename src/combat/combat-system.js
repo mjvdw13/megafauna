@@ -5,7 +5,7 @@
 // an event describing what happened so the scene can play effects and sounds.
 // No rendering happens here.
 // ============================================================================
-import { DEFENSE, KNOCKBACK_SCALE } from '../config.js';
+import { BURN, DEFENSE, KNOCKBACK_SCALE } from '../config.js';
 import { checkBoxCollision } from './hitbox.js';
 import { CharacterStates as S } from './states.js';
 
@@ -114,7 +114,17 @@ export function applyHit({ attack, attacker, defender, impact, sourceX, damageSc
     if (attack.launch > 0) { defender.isGrounded = false; defender.ground = null; }
     defender.fastFalling = false;
     defender.flash(3, 'hit');
+    event.ignited = ignite(defender, attack);
     return event;
+}
+
+/** Set a fighter on fire for the attack's `burn` ticks. Returns true if they caught fire just now. */
+export function ignite(defender, attack) {
+    if (!attack.burn || defender.abilities.fireproof) return false;
+    const wasBurning = defender.burnTicks > 0;
+    defender.burnTicks = Math.min(BURN.maxTicks, Math.max(defender.burnTicks, attack.burn));
+    if (!wasBurning) defender.burnTimer = BURN.interval;
+    return !wasBurning;
 }
 
 // ---------------------------------------------------------------------------- grabs
@@ -197,5 +207,6 @@ export function applyThrow(holder, attack) {
     victim.velocityY = -attack.launch;
     if (attack.launch > 0) { victim.isGrounded = false; victim.ground = null; }
     victim.flash(4, 'hit');
-    return { result: HitResult.HIT, attack, attacker: holder, defender: victim, damage, x: victim.centerX, y: victim.y + victim.height * 0.4, comboHit: 1, thrown: true };
+    const ignited = ignite(victim, attack);
+    return { result: HitResult.HIT, attack, attacker: holder, defender: victim, damage, x: victim.centerX, y: victim.y + victim.height * 0.4, comboHit: 1, thrown: true, ignited };
 }

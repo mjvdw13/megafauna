@@ -1,7 +1,8 @@
 // ============================================================================
 // PROJECTILE VIEW
 // 3-D projectiles in flight: Riley's bark (sound waves), Quackers' egg,
-// Randy's boulder, Dad's bad breath. Each one follows its gameplay projectile.
+// Randy's boulder, Dad's bad breath, Gary's fireball and ember patch. Each one
+// follows its gameplay projectile.
 // ============================================================================
 import * as THREE from 'three';
 import { addRest, DETAIL, withDetail } from './materials.js';
@@ -88,6 +89,38 @@ const BUILD = {
             g.add(s);
         }
         return g;
+    },
+    fireball() {
+        // A white-hot core inside orange glow, with a tail of cooling flames behind.
+        const g = new THREE.Group();
+        // The outer glow is blended normally so it stays orange over bright water and sky.
+        const glow = (color, opacity, additive = true) => new THREE.Sprite(new THREE.SpriteMaterial({ map: soft(), color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, fog: false }));
+        const layers = [['#ff5a14', 0.9, 0.62, false], ['#ffb02e', 1, 0.42], ['#fff4c8', 1, 0.24]];
+        for (const [color, opacity, size, additive] of layers) {
+            const s = glow(color, opacity, additive);
+            s.userData = { size, trail: 0 };
+            g.add(s);
+        }
+        for (let i = 1; i <= 6; i++) {
+            const s = glow(i < 3 ? '#ff9a1f' : '#e8401a', 0.75 - i * 0.1);
+            s.userData = { size: 0.42 - i * 0.04, trail: i };
+            g.add(s);
+        }
+        return g;
+    },
+    embers() {
+        // A smouldering patch: glowing coals on the ground with flames dancing over them.
+        const g = new THREE.Group();
+        const bed = new THREE.Mesh(new THREE.CircleGeometry(1, 28), new THREE.MeshBasicMaterial({ map: soft(), color: '#ff4a10', transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+        bed.rotation.x = -Math.PI / 2;
+        bed.userData.bed = true;
+        g.add(bed);
+        for (let i = 0; i < 9; i++) {
+            const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: soft(), color: i % 3 === 0 ? '#ffd36a' : '#ff7a1a', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+            s.userData = { u: (i / 8) * 2 - 1, z: ((i * 5) % 7) / 7 - 0.5, phase: i * 1.7 };
+            g.add(s);
+        }
+        return g;
     }
 };
 
@@ -132,6 +165,32 @@ export class ProjectileViews {
                     s.position.set(ox * size * spread + Math.sin(time * 2 + i) * 0.03, oy * size * spread + Math.sin(time * 2.6 + i * 1.3) * 0.025, oz * size);
                     s.scale.setScalar(size * s.userData.size * (1 + 0.08 * Math.sin(time * 3 + i)));
                     s.material.opacity = 0.85 * Math.min(1, fade * 2);
+                });
+            } else if (p.kind === 'fireball') {
+                const flicker = 1 + 0.12 * Math.sin(time * 40 + p.age);
+                obj.children.forEach((s, i) => {
+                    const { size, trail } = s.userData;
+                    s.position.set(-p.vx * PX * trail * 0.9,Math.sin(time * 30 + i * 2) * 0.012 * trail, 0);
+                    s.scale.setScalar(size * flicker * (1 + Math.min(1, p.age / 6) * 0.15));
+                    s.material.rotation = time * 6 + i;
+                });
+            } else if (p.kind === 'embers') {
+                // Sits on the ground; flames flicker over it and die down as it burns out.
+                const w = p.width * PX / 2, life = Math.min(1, fade * 4) * Math.min(1, p.age / 8);
+                obj.position.y = this.world.toWorldY(p.y + p.height);
+                obj.children.forEach((s) => {
+                    if (s.userData.bed) {
+                        s.position.y = 0.01;
+                        s.scale.set(w * 1.1, w * 0.55, 1);
+                        s.material.opacity = 0.75 * life;
+                        return;
+                    }
+                    const { u, z, phase } = s.userData;
+                    const lick = 0.5 + 0.5 * Math.sin(time * 9 + phase) * Math.sin(time * 5.3 + phase * 2);
+                    const h = (0.24 + 0.3 * lick) * life;
+                    s.position.set(u * w * 0.85, h * 0.45, z * 0.35);
+                    s.scale.set(0.2 + 0.08 * lick, h, 1);
+                    s.material.opacity = 0.9 * life;
                 });
             }
         }

@@ -6,11 +6,12 @@
 // ============================================================================
 import { isUnlocked } from '../core/unlocks.js';
 import dad from './dad/dad.js';
+import gary from './gary/gary.js';
 import quackers from './quackers/quackers.js';
 import randy from './randy/randy.js';
 import riley from './riley/riley.js';
 
-export const ROSTER = Object.freeze([riley, quackers, randy, dad]);
+export const ROSTER = Object.freeze([riley, quackers, randy, gary, dad]);
 
 /** The characters that can be picked right now: everyone except secrets not yet unlocked. */
 export function availableRoster() {

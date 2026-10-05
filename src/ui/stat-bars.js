@@ -24,6 +24,8 @@ export function characterBadges(def) {
     if (def.abilities?.glide) badges.push('GLIDES');
     if (def.abilities?.floats) badges.push('SWIMS');
     const moves = Object.values(def.moves || {});
+    if (moves.some((m) => m.burn)) badges.push('BURNS');
+    if (def.abilities?.fireproof) badges.push('FIREPROOF');
     if (moves.some((m) => m.counter)) badges.push('COUNTER');
     if (moves.some((m) => m.armor)) badges.push('SUPER ARMOR');
     if (moves.some((m) => m.intangible?.length)) badges.push('BURROWS');

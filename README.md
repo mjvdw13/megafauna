@@ -45,6 +45,7 @@ Which move comes out depends on the button plus the direction you hold:
 - **Grab:** shield + attack. Grabs go through shields. While holding: attack to pummel, a direction to throw. Mash buttons to escape a grab.
 - **Ledges:** fall near the edge of the main platform to grab it. From the ledge: ↑ or toward the stage climbs, jump jumps, ↓ or away lets go.
 - **Pits:** falling off the stage costs 20% of your max health, then you drop back in from above. After an up special you can't act again until you land or grab a ledge.
+- **Burning:** Gary's fire moves leave you burning for a few seconds (a point of damage every third of a second). Splash into water to put it out.
 - Title menu: **1 Player vs CPU** or **2 Players**. Change the CPU level (Easy / Normal / Hard) on the menu's last row with left/right.
 - Vs CPU: player 1 picks their fighter, then the CPU's.
 - Menus: Enter or Space confirms, Esc goes back.
@@ -111,7 +112,7 @@ Fighters and stages are realistic real-time 3-D, generated entirely in code: the
 
 ## Adding a character
 
-1. Create `src/fighters/<id>/<id>-model.js` exporting a model. Copy the closest existing one (Riley and Randy walk on four legs, Quackers has wings, Dad wears accessories). It describes, in world units with the character facing +x and its feet at y = 0:
+1. Create `src/fighters/<id>/<id>-model.js` exporting a model. Copy the closest existing one (Riley and Randy walk on four legs, Quackers and Gary have wings, Dad wears accessories). It describes, in world units with the character facing +x and its feet at y = 0:
    - `bones`: `[name, parent, [x, y, z]]` in the rest pose.
    - `parts`: `{ prims, min, max, step }` per mesh. `prims` are `cap(a, b, radiusA, radiusB, bone, blend, color)` and `ell(center, radii, bone, blend, color, tilt)` from `render3d/shapes.js`; `min`/`max` bound the part with a few cells of margin; `step` is the mesh resolution (smaller = finer and slower to build).
    - `colors`: `{ key: hex }` or `{ key: [hex, detailStrength, roughness] }`, plus an optional `shade(color, x, y, z, nx, ny, nz, colors)` for countershading and mottling.
@@ -145,14 +146,15 @@ Fighters and stages are realistic real-time 3-D, generated entirely in code: the
 | `airSpeed` | Top horizontal speed in the air |
 | `fallSpeed` | Top falling speed (lower is floatier) |
 
-`abilities` turns on special traits: `glide` (hold jump while falling) and `floats` (stand on water, pool and swamp pits).
+`abilities` turns on special traits: `glide` (hold jump while falling), `floats` (stand on water, pool and swamp pits) and `fireproof` (never burns).
 
 ### Move fields
 
 Moves go in `moves`, keyed by slot: `jab`, `ftilt`, `utilt`, `dtilt`, `dashAttack`, `fsmash`, `usmash`, `dsmash`, `nair`, `fair`, `bair`, `uair`, `dair`, `neutralSpecial`, `sideSpecial`, `upSpecial`, `downSpecial`, `grab`, `pummel`, `fthrow`, `bthrow`, `uthrow`, `dthrow`. Extra keys (like `jab2`) are reachable through `chain` or `counter`. Anything a character leaves out comes from `BASE_MOVES` in `src/combat/moveset.js`. Every field is documented in `src/combat/attack.js`.
 
 - **Frame data:** `damage`, `startup`, `active`, `recovery`, `hitstun`, `blockstun` (shield stun), `knockback`, `launch`, `hitbox` (`null` for projectile and counter moves).
-- **Behavior:** `knockdown`, `armor`, `movement` (`{ start, startup, active, recovery }` velocities), `charge` (smash attacks), `chain` (next move in a combo), `rehit` (multi-hit), `intangible` / `hidden` (phases), `helpless`, `landingLag`, `endsOnLanding`, `projectile`, `reflect`, `counter`, `grab`, `throwDir`.
+- **Behavior:** `knockdown`, `armor`, `movement` (`{ start, startup, active, recovery }` velocities), `charge` (smash attacks), `chain` (next move in a combo), `rehit` (multi-hit), `intangible` / `hidden` (phases), `helpless`, `landingLag`, `endsOnLanding`, `projectile` (with `max` to limit how many are out at once), `reflect`, `counter`, `grab`, `throwDir`, `dizzy`, `burn`.
+- **Burn:** a move with `burn: n` sets the opponent on fire on a clean hit or throw: 1 damage every `BURN.interval` frames (`src/config.js`), `n` times. A new burn doesn't stack, it keeps the longer one. Splashing into a water, pool, swamp or ice-water pit puts it out (`douses` in `src/stages/pits.js`).
 - **Presentation:** `pose`, `vfx`, `sfx`, `afterimages`, `anim` (`lean`, `lunge`, `squash`, `spin`, `roll`), `poses`, `callout`, `hitstop`.
 
 ## Adding a stage
@@ -169,7 +171,7 @@ Moves go in `moves`, keyed by slot: `jab`, `ftilt`, `utilt`, `dtilt`, `dashAttac
 
 ## Adding an attack effect
 
-Add an entry to `ATTACK_VFX` in `src/graphics/attack-vfx.js`, then reference it from a move with `vfx: '<name>'`.
+Add an entry to `ATTACK_VFX` in `src/graphics/attack-vfx.js`, then reference it from a move with `vfx: '<name>'`. Fire effects (`firepuff`, `fireblast`, `flamethrower`, `firering`, `phoenix`) are built from the flame particles in `src/graphics/fire.js`.
 
 ## Sound
 

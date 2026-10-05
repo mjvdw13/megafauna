@@ -207,6 +207,29 @@ export const SFX = {
         v.tone({ type: 'sawtooth', freq: 220, dur: 0.4, gain: 0.04, delay: 0.5, vibrato: { rate: 40, depth: 30 }, filter: { type: 'bandpass', freq: 900, Q: 3 } });
     },
 
+    fire: (v) => {
+        // A roaring whoosh of flame with crackles on top
+        v.noise({ dur: 0.55, gain: 0.45, attack: 0.04, filter: { type: 'lowpass', points: [[0, 500], [0.1, 1800], [0.55, 400]] } });
+        v.noise({ dur: 0.4, gain: 0.2, attack: 0.05, filter: { type: 'bandpass', freq: 900, to: 300, Q: 1.2 } });
+        for (let i = 0; i < 5; i++) v.noise({ dur: 0.02, gain: 0.2, delay: 0.05 + i * 0.07 + Math.random() * 0.03, filter: { type: 'highpass', freq: 3000 } });
+    },
+
+    fireball: (v) => {
+        // "Fwoomp": a puff of breath catching light
+        v.noise({ dur: 0.25, gain: 0.45, attack: 0.02, filter: { type: 'bandpass', points: [[0, 300], [0.06, 1600], [0.25, 500]], Q: 1.4 } });
+        v.tone({ freq: 140, to: 70, dur: 0.18, gain: 0.35 });
+    },
+
+    crackle: (v) => {
+        for (let i = 0; i < 3; i++) v.noise({ dur: 0.018, gain: 0.16, delay: i * 0.04 + Math.random() * 0.02, filter: { type: 'bandpass', freq: 2500 + Math.random() * 2500, Q: 3 } });
+    },
+
+    coo: (v) => {
+        // Pigeon "coo-roo": two soft, throaty hoots
+        v.tone({ type: 'sine', points: [[0, 300], [0.08, 360], [0.2, 290]], dur: 0.22, gain: 0.35, vibrato: { rate: 18, depth: 12 }, filter: { type: 'lowpass', freq: 900 } });
+        v.tone({ type: 'sine', points: [[0, 330], [0.12, 260]], dur: 0.32, gain: 0.3, delay: 0.24, vibrato: { rate: 16, depth: 10 }, filter: { type: 'lowpass', freq: 800 } });
+    },
+
     chestpound: (v) => {
         // Hollow thumps on a big chest, alternating hands
         for (let i = 0; i < 6; i++) {
@@ -286,7 +309,10 @@ export const SFX = {
 };
 
 /** Sounds played for an attack effect when the move does not name its own `sfx`. */
-const VFX_SFX = { uppercut: 'uppercut', whirlwind: 'whirlwind', feathers: 'feathers', charge: 'charge', quake: 'quake', soundwave: 'soundwave' };
+const VFX_SFX = {
+    uppercut: 'uppercut', whirlwind: 'whirlwind', feathers: 'feathers', charge: 'charge', quake: 'quake', soundwave: 'soundwave',
+    firepuff: 'fire', fireblast: 'fire', flamethrower: 'fire', firering: 'fire', phoenix: 'fire'
+};
 
 /** The sound for an attack's active frames: its own `sfx`, else one matching its vfx, else a whoosh. */
 export function attackSound(attack) {

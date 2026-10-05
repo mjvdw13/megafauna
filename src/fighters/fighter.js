@@ -106,6 +106,8 @@ export class Fighter {
         this.holdTimer = 0;
         this.bufferedThrow = null;
         this.comboHitCount = 0;
+        this.burnTicks = 0;   // burn damage still to come (see BURN in config.js)
+        this.burnTimer = 0;   // frames until the next tick
         this.input = null;
         this.cancelAttack();
         // Presentation state
@@ -439,12 +441,13 @@ export class Fighter {
         return pose;
     }
 
-    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow (around the edges). */
+    /** Emissive tint over the 3-D model: white hit flash, orange armor flash, golden charge glow and flickering burn (around the edges). */
     overlayTint() {
         if (this.flashFrames > 0) {
             return this.flashKind === 'armor' ? { color: '#ff9f43', alpha: 0.7 } : { color: '#ffffff', alpha: 0.85 };
         }
         if (this.chargeFrames > 0) return { color: '#ffb81f', alpha: 0.45 + 0.4 * Math.abs(Math.sin(this.chargeFrames * 0.35)), rim: true };
+        if (this.burnTicks > 0) return { color: '#ff5a14', alpha: 0.5 + 0.3 * Math.abs(Math.sin(this.burnTimer * 0.9) * Math.sin(this.burnTimer * 0.37)), rim: true };
         return null;
     }
 

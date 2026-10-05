@@ -85,6 +85,8 @@ export class Attack {
         this.throwDir = config.throwDir || null;
         // Leaves a grounded opponent dizzy (stars, can't act) for this many frames instead of normal hitstun.
         this.dizzy = config.dizzy || 0;
+        // Sets the opponent on fire on a clean hit: this many ticks of burn damage (see BURN in config.js).
+        this.burn = config.burn || 0;
         Object.freeze(this);
     }
 

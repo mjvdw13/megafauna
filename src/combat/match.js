@@ -13,8 +13,10 @@
 //   { type: 'splash', fighter, x, y }     a fighter fell into the pit
 //   { type: 'ringOut', fighter, x, damage } a fighter left the screen and respawned
 //   { type: 'grabEscape', fighter }       a held fighter broke free
+//   { type: 'burn', fighter, damage }     a burning fighter took a tick of fire damage
+//   { type: 'douse', fighter, x, y }      a burning fighter splashed into water and went out
 // ============================================================================
-import { DEFENSE, RING_OUT, SCREEN } from '../config.js';
+import { BURN, DEFENSE, RING_OUT, SCREEN } from '../config.js';
 import { clamp } from '../core/math.js';
 import { Physics } from '../core/physics.js';
 import { applyAttackHit, applyHit, applyPummel, applyThrow, findHit, HitResult, updateGrab } from './combat-system.js';
@@ -80,13 +82,29 @@ export class Match {
             if (hit) events.push({ type: 'hit', hit });
         }
 
+        for (const f of this.fighters) this.updateBurn(f, events);
         for (const f of this.fighters) this.checkPit(f, events);
         return events;
+    }
+
+    /** Burning fighters take a tick of damage every BURN.interval frames until the flames run out. */
+    updateBurn(f, events) {
+        if (f.burnTicks <= 0 || --f.burnTimer > 0) return;
+        f.burnTicks--;
+        f.burnTimer = BURN.interval;
+        f.takeDamage(1);
+        events.push({ type: 'burn', fighter: f, damage: 1 });
     }
 
     onAttackActive(fighter, event, events) {
         const { attack, key } = event;
         if (attack.projectile) {
+            // Some projectiles (Gary's ember patch) allow only so many at once: the oldest goes out.
+            const max = attack.projectile.max;
+            if (max) {
+                const mine = this.projectiles.filter((p) => p.owner === fighter && p.kind === attack.projectile.kind && !p.dead);
+                for (const old of mine.slice(0, Math.max(0, mine.length - max + 1))) old.end('replaced');
+            }
             const projectile = new Projectile(fighter, attack);
             this.projectiles.push(projectile);
             events.push({ type: 'projectile', projectile });
@@ -173,6 +191,10 @@ export class Match {
         if (!f.splashed && overPit && !f.anchored && f.feetY > this.stage.pitSurfaceY && f.velocityY > 0 && !f.isGrounded) {
             f.splashed = true;
             events.push({ type: 'splash', fighter: f, x: f.centerX, y: this.stage.pitSurfaceY });
+            if (f.burnTicks > 0 && this.stage.pit.douses) {
+                f.burnTicks = 0;
+                events.push({ type: 'douse', fighter: f, x: f.centerX, y: this.stage.pitSurfaceY });
+            }
         }
         const out = f.y > SCREEN.height + RING_OUT.margin || f.x + f.width < -RING_OUT.margin || f.x > SCREEN.width + RING_OUT.margin;
         if (out) events.push(this.ringOut(f));

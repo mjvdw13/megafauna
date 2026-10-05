@@ -6,7 +6,8 @@
 //
 // Spec fields: kind, width, height, speed, vy, gravity, life, offset [x, y]
 // (from the fighter's center / top), rolls (stays on platforms and keeps going),
-// pierce (keeps going after a hit), grow (px of size added per frame).
+// pierce (keeps going after a hit), grow (px of size added per frame),
+// max (how many of this kind one fighter can have out; a new one ends the oldest).
 // ============================================================================
 import { SCREEN } from '../config.js';
 
