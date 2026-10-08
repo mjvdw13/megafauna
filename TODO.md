@@ -14,6 +14,23 @@ What was checked: `npm test` passes; in Chrome on Intel UHD integrated graphics,
 - [ ] **Hit feel (new).** Checked frame by frame in Chrome (Riley vs Dad): a smash hit, a jab-jab-chomp combo through real key presses (buffered), a block on the volcano, and a KO; and a full CPU-vs-CPU match through to the result screen with no console errors. The camera's 3-D and 2-D transforms were checked numerically to line up under zoom and roll. Not yet felt at full speed with a person playing: tune `HIT_TIERS` (hitstop, shake, punch) and the impact light (`LIGHT_PEAK` in `render3d/fight-view.js`) by hand. Also check that multi-hit fire moves (Flamethrower) don't stutter from repeated hitstop, and the frame rate during a busy KO on Intel UHD.
 - [ ] **Tar pits:** the last change (lower specular) to stop the tar reading as grey water hasn't been looked at.
 
+## Online play (v1, October 2026)
+
+What was checked: `npm test` (two simulated computers over a laggy network stay identical frame by frame). In Chrome on this machine, two copies of the game in one page (host and guest, real PeerJS + WebRTC): invite, join, lobby picks and stage, a full match to the result screen with every frame's state hash matching (1,500+ frames compared, 0 mismatches), rematch through the lobby, the stall notice and recovery when one side pauses, the guest closing their page mid-fight, and an expired invite link.
+
+Not yet tried: two different computers on different networks (latency, NAT), the `C` copy-link key (needs a real key press), controllers online, Firefox / Safari, and the GitHub Pages deploy itself.
+
+Corners cut for v1:
+
+- [ ] **Relay (TURN) server is PeerJS's shared public one.** Most pairs connect directly, but roughly 1 in 10 (strict or corporate NATs, some mobile hotspots) need a relay. PeerJS's defaults include free shared TURN servers (eu-0/us-0.turn.peerjs.com) with no guarantees on capacity or latency. If friends see "Couldn't reach your friend's game" or high ping, add our own TURN service (Cloudflare Calls TURN, or Metered's free tier) to the `Peer` config in `net/online.js`.
+- [ ] **Delay-based, not rollback.** Every press shows up 3 frames late, and a link slower than ~50 ms one way stalls. Rollback (predict the remote input, rewind and resimulate) needs save/restore of the whole fight state, plus effects and sounds that tolerate replays.
+- [ ] **Desyncs are only reported.** If the two copies drift apart (most likely between different browsers: `Math.sin`, `Math.pow`, `Math.hypot` aren't guaranteed identical, and a few are used in `fighter.js` and `state-machine.js`), the game says "out of sync" but plays on. Fix options: replace those calls with deterministic versions, or have the host send a state snapshot to resync.
+- [ ] **A hidden tab freezes the game for both.** The browser stops drawing a tab that's in the background, so if either player switches tabs, both stall until they come back. Could keep simulating on a timer while hidden, or pause with a notice.
+- [ ] **Depends on the free PeerJS servers** (0.peerjs.com) for introductions. If it's down, nobody can start a game. Self-hosting PeerServer, or a different signaling path, would remove the dependency.
+- [ ] **No stage preview or random stage in the online lobby**, no CPU-level or secret-character code there, and no way to cancel the 'ready' of the other player. The secret character can be picked online only if you unlocked it on your own page first.
+- [ ] **The invite link can't be selected with the mouse** (it's drawn on the canvas). `C` copies it; if clipboard access is refused the player has to type it.
+- [ ] **One-off black 3-D picture.** In the two-copies-in-one-page test, the first guest's fight once rendered nearby objects black (sky and far trees fine). A fresh guest rendered correctly and it didn't come back. Likely a test artifact (two WebGL games in one hidden tab), but watch for it when a guest arrives straight from an invite link.
+
 ## Improve
 
 - [ ] **Riley's moveset vs. Riley's body.** Riley is now a four-legged dog; some move names still assume paws as fists ("Paw Jab"). Rename moves or rework poses so every move reads as something a dog does.

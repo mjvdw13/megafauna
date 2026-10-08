@@ -80,7 +80,7 @@ export class InputHandler {
         this.player1 = createPlayerInput();
         this.player2 = createPlayerInput();
         this.gestures = [new GestureTracker(), new GestureTracker()];
-        this.menu = { confirm: false, back: false, mute: false };
+        this.menu = { confirm: false, back: false, mute: false, copy: false };
         this.boundCodes = new Set(
             [controls.p1, controls.p2, controls.menu].flatMap((map) => Object.values(map).flat())
         );
@@ -116,12 +116,22 @@ export class InputHandler {
         this.menu.confirm = this.isPressed(this.controls.menu.confirm);
         this.menu.back = this.isPressed(this.controls.menu.back);
         this.menu.mute = this.isPressed(this.controls.menu.mute);
+        this.menu.copy = this.isPressed(this.controls.menu.copy);
         // Snapshot AFTER evaluating presses so "pressed" is true for exactly one step.
         this.previousKeys = new Map(this.keys);
         this.tapped.clear();
     }
 
     getPlayerInput(playerNumber) { return playerNumber === 1 ? this.player1 : this.player2; }
+
+    /** Both players' controls as one (online, where the one person here can use either set of keys). */
+    combined() {
+        const a = this.player1, b = this.player2;
+        const input = createPlayerInput();
+        for (const key of Object.keys(input)) input[key] = a[key] || b[key];
+        input.dash = a.dash || b.dash;
+        return finishInput(input);
+    }
 
     /** Menu confirm from Enter/Space, either player's attack key, or a controller's ✕. */
     anyConfirm() { return this.menu.confirm || this.player1.confirmPressed || this.player2.confirmPressed; }

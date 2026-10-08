@@ -10,12 +10,14 @@ import { AudioEngine } from '../audio/audio-engine.js';
 import { FIXED_STEP_MS, MAX_STEPS_PER_FRAME, SCREEN } from '../config.js';
 import { ROSTER } from '../fighters/roster.js';
 import { createPaperOverlay, drawPaper } from '../graphics/paper.js';
+import { inviteCodeFromUrl } from '../net/online.js';
 import { getTemplate } from '../render3d/models.js';
 import { Studio } from '../render3d/studio.js';
 import { View3D } from '../render3d/view.js';
 import { getSnapshot } from '../render3d/worlds.js';
 import { CharacterSelectScene } from '../scenes/character-select-scene.js';
 import { FightScene } from '../scenes/fight-scene.js';
+import { OnlineScene } from '../scenes/online-scene.js';
 import { ResultScene } from '../scenes/result-scene.js';
 import { StageSelectScene } from '../scenes/stage-select-scene.js';
 import { TitleScene } from '../scenes/title-scene.js';
@@ -39,6 +41,7 @@ export class Game {
         // Choices that persist between scenes (and rematches).
         // mode: 'cpu' (P1 vs the computer) or 'versus' (two players). cpuLevel: a key of CPU_LEVELS.
         this.session = { mode: 'cpu', cpuLevel: CPU_LEVEL_IDS[1], p1: ROSTER[0].id, p2: ROSTER[1 % ROSTER.length].id, stage: STAGES[0].id };
+        this.online = null; // the OnlineSession while playing a friend over the internet
         this.debug = new URLSearchParams(window.location.search).has('debug');
         window.addEventListener('keydown', (e) => { if (e.code === 'Backquote') this.debug = !this.debug; });
 
@@ -47,7 +50,8 @@ export class Game {
             characterSelect: new CharacterSelectScene(this),
             stageSelect: new StageSelectScene(this),
             fight: new FightScene(this),
-            result: new ResultScene(this)
+            result: new ResultScene(this),
+            online: new OnlineScene(this)
         };
     }
 
@@ -65,7 +69,10 @@ export class Game {
             await new Promise((resolve) => setTimeout(resolve, 16)); // let the progress bar paint
             job();
         }
-        this.changeScene('title');
+        // Opened from an invite link: straight into the online lobby.
+        const code = inviteCodeFromUrl();
+        if (code) this.changeScene('online', { role: 'guest', code });
+        else this.changeScene('title');
     }
 
     drawLoading(label, progress) {
@@ -116,6 +123,11 @@ export class Game {
     }
 
     step() {
+        if (this.toast && --this.toast.frames <= 0) this.toast = null;
+        // The online opponent left mid-fight: back to the lobby, which says what happened.
+        if (this.online?.closed && this.sceneName !== 'online') this.changeScene('online');
+        // Online, waiting for the other side's input: hold this frame, and keep any presses for when it runs.
+        if (this.scene.waiting?.()) return;
         this.input.update();
         if (this.input.menu.mute) {
             const muted = this.audio.toggleMute();
@@ -127,7 +139,6 @@ export class Game {
             this.audio.play(event.type === 'connected' ? 'ready' : 'menu-back');
             if (event.type === 'connected') this.input.gamepads.rumble(event.player, { strong: 0.6, weak: 0.3, duration: 200 });
         }
-        if (this.toast && --this.toast.frames <= 0) this.toast = null;
         this.scene.update();
     }
 

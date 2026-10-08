@@ -1,6 +1,7 @@
 // ============================================================================
 // TITLE SCENE
-// Main menu: fight the CPU or another player, and pick the CPU's difficulty.
+// Main menu: fight the CPU, another player here or a friend online, and pick
+// the CPU's difficulty.
 // Behind it, the roster stands on the Sunny Meadow island in 3-D.
 // ============================================================================
 import { CPU_LEVEL_IDS, CPU_LEVELS } from '../ai/cpu-controller.js';
@@ -15,6 +16,7 @@ import { drawText, DISPLAY_FONT } from '../ui/text.js';
 const MENU = Object.freeze([
     { id: 'cpu', label: '1 PLAYER  VS  CPU' },
     { id: 'versus', label: '2 PLAYERS' },
+    { id: 'online', label: 'PLAY A FRIEND ONLINE' },
     { id: 'level', label: 'CPU LEVEL' }
 ]);
 const MENU_TOP = 316;
@@ -64,7 +66,10 @@ export class TitleScene {
             session.cpuLevel = CPU_LEVEL_IDS[(i + (pressed('left') ? -1 : 1) + CPU_LEVEL_IDS.length) % CPU_LEVEL_IDS.length];
             audio.play('menu-move');
         }
-        if (input.anyConfirm()) {
+        if (input.anyConfirm() && MENU[this.index].id === 'online') {
+            audio.play('menu-confirm');
+            this.game.changeScene('online', { role: 'host' });
+        } else if (input.anyConfirm()) {
             session.mode = MENU[this.index].id === 'versus' ? 'versus' : 'cpu';
             audio.play('menu-confirm');
             this.game.changeScene('characterSelect');

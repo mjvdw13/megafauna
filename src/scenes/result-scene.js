@@ -1,9 +1,12 @@
 // ============================================================================
 // RESULT SCENE
+// Online, both buttons go back to the online lobby (still connected) to pick
+// again; ESC leaves the online game.
 // ============================================================================
 import { CPU_LEVELS } from '../ai/cpu-controller.js';
 import { SCREEN } from '../config.js';
 import { getCharacter } from '../fighters/roster.js';
+import { clearInviteFromUrl } from '../net/online.js';
 import { drawText, DISPLAY_FONT } from '../ui/text.js';
 
 export class ResultScene {
@@ -23,7 +26,8 @@ export class ResultScene {
     }
 
     get winnerLabel() {
-        const { winner, cpu } = this.match;
+        const { winner, cpu, online } = this.match;
+        if (online) return winner === online.localIndex + 1 ? 'You win!' : 'Your friend wins!';
         if (!cpu) return `Player ${winner}`;
         return winner === 1 ? 'You beat the CPU!' : `CPU (${CPU_LEVELS[cpu].label}) wins`;
     }
@@ -32,6 +36,17 @@ export class ResultScene {
         this.time++;
         const { input } = this.game;
         if (this.time < 30) return; // ignore button mashing carried over from the fight
+        if (this.match.online) {
+            if (input.menu.back) {
+                this.match.online.close();
+                this.game.online = null;
+                clearInviteFromUrl();
+                this.game.changeScene('title');
+            } else if (input.anyConfirm() || input.player1.specialPressed || input.player2.specialPressed) {
+                this.game.changeScene('online');
+            }
+            return;
+        }
         if (input.player1.specialPressed || input.player2.specialPressed) this.game.changeScene('fight', this.match);
         else if (input.anyConfirm()) this.game.changeScene('characterSelect');
         else if (input.menu.back) this.game.changeScene('title');
@@ -60,6 +75,7 @@ export class ResultScene {
         drawText(ctx, this.winnerDef.name.toUpperCase(), width / 2, 490, { size: 80, font: DISPLAY_FONT, weight: 'normal', color: this.winnerDef.color, outline: '#2a1d17', outlineWidth: 9 });
         drawText(ctx, this.winnerLabel, width / 2, 540, { size: 32, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
 
-        drawText(ctx, 'J / Enter / ✕: Character Select   ·   L / Num3 / ○: Rematch   ·   ESC: Title', width / 2, 640, { size: 24, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
+        const help = this.match.online ? 'J / Enter / ✕: Pick again for a rematch   ·   ESC: Leave the online game' : 'J / Enter / ✕: Character Select   ·   L / Num3 / ○: Rematch   ·   ESC: Title';
+        drawText(ctx, help, width / 2, 640, { size: 24, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
     }
 }

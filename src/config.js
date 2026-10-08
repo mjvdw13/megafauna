@@ -73,5 +73,5 @@ export const CONTROLS = Object.freeze({
         left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], jump: ['Numpad5'],
         attack: ['Numpad1', 'Comma'], smash: ['Numpad2', 'Period'], special: ['Numpad3', 'Slash'], shield: ['Numpad0', 'ShiftRight']
     },
-    menu: { confirm: ['Enter', 'Space'], back: ['Escape'], mute: ['KeyM'] }
+    menu: { confirm: ['Enter', 'Space'], back: ['Escape'], mute: ['KeyM'], copy: ['KeyC'] }
 });

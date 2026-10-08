@@ -1,6 +1,6 @@
 # MegaFauna
 
-A browser fighting game for one player against the CPU, or two players at one keyboard. Smash-style controls and stages (platforms, ledges, pits), with classic health bars: drain your opponent's health to win the round. Realistic real-time 3D fighters and stages, all generated in code. Plain JavaScript modules, no build step, nothing to install: the one library, [three.js](https://threejs.org), is vendored in `vendor/three/`.
+A browser fighting game for one player against the CPU, two players at one keyboard, or two friends online. Smash-style controls and stages (platforms, ledges, pits), with classic health bars: drain your opponent's health to win the round. Realistic real-time 3D fighters and stages, all generated in code. Plain JavaScript modules, no build step, nothing to install: the libraries, [three.js](https://threejs.org) and [PeerJS](https://peerjs.com) (for online play), are vendored in `vendor/`.
 
 ## Running
 
@@ -53,12 +53,23 @@ Which move comes out depends on the button plus the direction you hold:
 - Rematch from the result screen: special.
 - Hitbox debug overlay: press `` ` `` (backtick), or open with `?debug`.
 
+## Playing online
+
+Pick **Play a friend online** on the title screen. You get an invite link (press `C` to copy it); send it to a friend, and when they open it you're both in a lobby. Each of you picks a fighter, the host picks the stage, and the fight starts once you've both confirmed. Online, each player uses their own keyboard (either set of keys) or controller. After the match, confirm returns you both to the lobby for a rematch; Esc leaves.
+
+How it works (`src/net/`):
+
+- **Connection** (`online.js`): the two browsers connect directly over WebRTC. PeerJS's free public server (0.peerjs.com) only introduces them, so the game needs no server of its own and runs from any static host, such as GitHub Pages. The host plays P1, the guest P2.
+- **Netcode** (`lockstep.js`): delay-based lockstep. The fight is deterministic, so only button presses cross the network, one integer per player per frame. Each press is scheduled 3 frames (50 ms) ahead; a frame runs once both players' inputs for it have arrived, otherwise the game holds that frame ("waiting for opponent"). Add `?delay=N` to the URL to try a different delay. Every frame the two copies compare a hash of the fight state, and a mismatch shows "out of sync".
+- Some networks (strict or corporate NATs) can't connect directly. Then the traffic goes through a relay (TURN) server; PeerJS's shared public ones are used by default (see [TODO.md](TODO.md)).
+
 ## Project layout
 
 ```
 index.html            page shell, import map for three.js, loads src/main.js
 scripts/serve.mjs     zero-dependency dev server
 vendor/three/         three.js r170 (MIT) and the four addons the game uses
+vendor/peerjs/        PeerJS 1.5.5 (MIT), loaded only when going online
 src/
   config.js           screen size, physics defaults, match rules, key bindings
   main.js             entry point
@@ -75,9 +86,10 @@ src/
     index.js          the stage list
   render3d/           the 3-D renderer: models, worlds, fighters, projectiles, menus (see below)
   graphics/           puppet (pose animation), 2-D effects and attack VFX, ink toolkit, paper overlay
-  scenes/             title, character select, stage select, fight, result
+  net/                online play: PeerJS session (online.js), lockstep netcode + input codec (lockstep.js)
+  scenes/             title, character select, stage select, fight, result, online lobby
   ui/                 HUD, stat bars, hand-drawn panels, text helpers
-tests/                node --test suites for combat, roster, models, stages, CPU, audio, controllers
+tests/                node --test suites for combat, roster, models, stages, CPU, audio, controllers, lockstep
 ```
 
 The rule of thumb: characters and stages are **data**. The engine (`combat/`, `fighters/fighter.js`, `stages/stage.js`, `render3d/`) should not need to change to add content. Model and world files never import three.js, so `npm test` loads and checks them in plain Node.

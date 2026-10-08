@@ -2,7 +2,8 @@
 // FIGHT SCENE
 // Runs a best-of-N match: round intro → fight → KO → next round / result.
 // The fighting itself happens in combat/match.js; this scene feeds it inputs
-// (player 2 is a keyboard player or a CpuController) and turns the events it
+// (player 2 is a keyboard player, a CpuController, or online, a friend whose
+// inputs arrive through net/lockstep.js) and turns the events it
 // returns into hit sparks, sounds, hitstop and camera shake. The fight is drawn
 // in 3-D (render3d/fight-view.js) with 2-D effects and the HUD on top.
 //
@@ -28,6 +29,7 @@ import { BlockSpark, burst, Callout, dustPuff, EffectsManager, RingPulse } from 
 import { burningFlames, fireBurst } from '../graphics/fire.js';
 import { debris, FocusLines, ImpactStar, impactSparks, launchSmoke, ShockRing } from '../graphics/impacts.js';
 import { projectileEndEffect } from '../graphics/projectile-effects.js';
+import { hashFighters } from '../net/lockstep.js';
 import { FightView } from '../render3d/fight-view.js';
 import { getStage } from '../stages/index.js';
 import { Stage } from '../stages/stage.js';
@@ -63,6 +65,7 @@ export function impactTier(hit) {
 }
 const TENSE_HEALTH = 0.3;
 const TICK_SECONDS = 5;
+const SHOW_WAITING_AFTER = 20; // online: frames stalled before "waiting for opponent" shows
 
 export class FightScene {
     constructor(game) {
@@ -74,13 +77,21 @@ export class FightScene {
         this.view3d = null;
     }
 
-    /** @param cpu  CPU difficulty for player 2, or null for a second human player */
-    enter({ p1, p2, stage, cpu = null }) {
-        this.matchConfig = { p1, p2, stage, cpu };
+    /**
+     * @param cpu     CPU difficulty for player 2, or null for a second human player
+     * @param online  the OnlineSession when playing a friend over the internet
+     */
+    enter({ p1, p2, stage, cpu = null, online = null }) {
+        this.matchConfig = { p1, p2, stage, cpu, online };
+        this.online = online;
+        this.lockstep = online?.lockstep ?? null;
+        this.netInputs = null;
+        this.desyncShown = false;
         this.stage = new Stage(getStage(stage));
+        const labels = online ? ['P1', 'P2'].map((l, i) => (i === online.localIndex ? 'YOU' : l)) : ['P1', cpu ? 'CPU' : 'P2'];
         this.fighters = [
-            new Fighter(getCharacter(p1), { playerNumber: 1, render: true }),
-            new Fighter(getCharacter(p2), { playerNumber: 2, render: true, label: cpu ? 'CPU' : 'P2' })
+            new Fighter(getCharacter(p1), { playerNumber: 1, render: true, label: labels[0] }),
+            new Fighter(getCharacter(p2), { playerNumber: 2, render: true, label: labels[1] })
         ];
         this.match = new Match(this.stage, this.fighters);
         this.view3d?.dispose();
@@ -128,7 +139,46 @@ export class FightScene {
 
     // ------------------------------------------------------------------ update
 
+    /** Online: true while the other side's input for the next frame hasn't arrived (the game holds the frame). */
+    waiting() {
+        if (!this.lockstep || this.lockstep.ready()) return false;
+        this.lockstep.stall();
+        return true;
+    }
+
     update() {
+        // Online, every frame (intro and KO too) runs on both players' inputs for that frame.
+        const frame = this.lockstep?.frame;
+        if (this.lockstep) this.netInputs = this.lockstep.advance(this.game.input.combined());
+        this.updateFrame();
+        if (this.lockstep) this.checkSync(frame);
+    }
+
+    /** Online: compare the fight with the other copy now and then. A mismatch is only reported. */
+    checkSync(frame) {
+        this.lockstep.check(frame, hashFighters(this.fighters, [this.timeLeft, this.round, this.roundTimer, this.hitstop, ...this.wins]));
+        if (this.lockstep.desyncFrame >= 0 && !this.desyncShown) {
+            this.desyncShown = true;
+            console.warn(`Online fight out of sync at frame ${this.lockstep.desyncFrame}`);
+            this.game.toast = { text: 'OUT OF SYNC: THE TWO SCREENS DISAGREE', frames: 300 };
+        }
+    }
+
+    /** The two fighters' inputs this frame: from the network online, else the keyboard / controllers / CPU. */
+    frameInputs() {
+        if (this.netInputs) return this.netInputs;
+        const input = this.game.input;
+        // Read both inputs before anyone moves, so the CPU sees the same moment a human would.
+        return [input.getPlayerInput(1), this.cpu ? this.cpu.getInput(this.fighters[0], this.stage) : input.getPlayerInput(2)];
+    }
+
+    /** Rumble the controller of the person playing `fighter`, if they're at this computer. */
+    rumble(fighter, options) {
+        if (!this.online) this.game.input.gamepads.rumble(fighter.playerNumber, options);
+        else if (this.fighters.indexOf(fighter) === this.online.localIndex) this.game.input.gamepads.rumble(1, options);
+    }
+
+    updateFrame() {
         this.stage.update();
         this.roundTimer++;
         if (this.round === Round.INTRO) this.updateIntro();
@@ -155,18 +205,15 @@ export class FightScene {
             this.hitstop--;
             for (const f of this.fighters) if (f.shakeFrames > 0) f.shakeFrames--;
             // Presses made during the freeze still count: they wait in the fighters' input buffers.
-            this.fighters.forEach((f, i) => { if (i === 0 || !this.cpu) f.bufferPresses(this.game.input.getPlayerInput(i + 1)); });
+            const inputs = this.netInputs ?? [this.game.input.getPlayerInput(1), this.cpu ? null : this.game.input.getPlayerInput(2)];
+            this.fighters.forEach((f, i) => { if (inputs[i]) f.bufferPresses(inputs[i]); });
             this.updateScreenFx();
             return;
         }
 
         this.timeLeft--;
         if (this.timeLeft % 60 === 0 && this.timeLeft > 0 && this.timeLeft <= TICK_SECONDS * 60) this.audio.play('tick');
-        const [p1, p2] = this.fighters;
-        const input = this.game.input;
-        // Read both inputs before anyone moves, so the CPU sees the same moment a human would.
-        const p2Input = this.cpu ? this.cpu.getInput(p1, this.stage) : input.getPlayerInput(2);
-        const events = this.match.step([input.getPlayerInput(1), p2Input]);
+        const events = this.match.step(this.frameInputs());
         for (const event of events) this.onMatchEvent(event);
 
         // Burrowing fighters leave a trail of churned-up dirt.
@@ -395,11 +442,10 @@ export class FightScene {
         this.hud.comboHit(this.fighters.indexOf(attacker), hit);
 
         // Controller rumble: the one who got hit feels it most.
-        const pads = this.game.input.gamepads;
         const k = Math.min(1, hit.damage / 18);
         const big = tier >= 3 ? 1 : 0;
-        pads.rumble(defender.playerNumber, { strong: 0.3 + 0.7 * k, weak: 0.5, duration: 80 + 160 * k + 120 * big });
-        pads.rumble(attacker.playerNumber, { strong: 0.1 + 0.3 * big, weak: 0.3 * k + 0.1, duration: 60 + 60 * big });
+        this.rumble(defender, { strong: 0.3 + 0.7 * k, weak: 0.5, duration: 80 + 160 * k + 120 * big });
+        this.rumble(attacker, { strong: 0.1 + 0.3 * big, weak: 0.3 * k + 0.1, duration: 60 + 60 * big });
 
         if (attack.knockdown) {
             this.effects.add(dustPuff(defender.centerX, defender.feetY, { count: 8, spread: defender.width }));
@@ -486,7 +532,7 @@ export class FightScene {
         this.camera.shake(10);
         this.hitstop = Math.max(this.hitstop, 8);
         this.audio.play('ringout', { x });
-        this.game.input.gamepads.rumble(fighter.playerNumber, { strong: 1, weak: 0.6, duration: 350 });
+        this.rumble(fighter, { strong: 1, weak: 0.6, duration: 350 });
         this.effects.add(new RingPulse(fighter.centerX, fighter.y + fighter.height / 2, { color: fighter.accentColor, from: 90, to: 20, life: 20, width: 5 }));
     }
 
@@ -517,7 +563,7 @@ export class FightScene {
             this.darken = { x: at.x, y: at.y, amount: 1.4 };
         }
         this.audio.play(knockout ? 'ko' : 'gong');
-        if (knockout) for (const f of this.fighters) this.game.input.gamepads.rumble(f.playerNumber, { strong: 0.8, weak: 0.8, duration: 500 });
+        if (knockout) for (const f of this.fighters) this.rumble(f, { strong: 0.8, weak: 0.8, duration: 500 });
         this.audio.announce({ ko: 'K. O.!', time: 'Time!', draw: 'Draw!' }[this.koReason], { pitch: 0.6, rate: 0.85 });
         this.audio.music.duck(true);
         for (const [me, other] of [[p1, p2], [p2, p1]]) {
@@ -562,6 +608,16 @@ export class FightScene {
         this.renderOffscreenMarkers(ctx);
         this.hud.render(ctx, { wins: this.wins, roundsToWin: MATCH.roundsToWin, seconds: Math.max(0, Math.ceil(this.timeLeft / 60)), time: this.stage.time, studio: this.game.studio });
         this.renderOverlay(ctx);
+        if (this.online) this.renderNetStatus(ctx);
+    }
+
+    /** Online: the ping in the corner, and a notice while the other side's input is late. */
+    renderNetStatus(ctx) {
+        const { width, height } = SCREEN;
+        if (this.online.rtt !== null) drawText(ctx, `PING ${Math.round(this.online.rtt)} ms`, 16, height - 14, { size: 16, align: 'left', color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4, alpha: 0.8 });
+        if (this.lockstep.stalls > SHOW_WAITING_AFTER) {
+            drawText(ctx, 'WAITING FOR OPPONENT...', width / 2, height / 2 + 150, { size: 40, font: DISPLAY_FONT, weight: 'normal', color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 7 });
+        }
     }
 
     /** Darkened frame around a smash hit, white flashes, and the letterbox bars during a knockout. */
