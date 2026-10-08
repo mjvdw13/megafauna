@@ -31,6 +31,8 @@ Known gaps and next steps are tracked in [TODO.md](TODO.md).
 
 Controllers rumble on hits, ring-outs and KOs where the browser supports it.
 
+**Phones and tablets** (vs CPU and online): on-screen controls appear on touch screens; turn the phone sideways. Put your left thumb anywhere on the left half for a stick (push up to jump, flick sideways to run); the right side has the face buttons in the controller's diamond (Jump, Attack, Smash, Special) with Shield and Grab above. In menus the stick chooses and the buttons become OK / BACK; host an online game and SHARE LINK opens the phone's share sheet. Add `?touch=1` to the URL to force the controls on (e.g. to try them with a mouse), or `?touch=0` to hide them. The code is `src/core/touch.js`.
+
 Which move comes out depends on the button plus the direction you hold:
 
 | | Ground | Air |
@@ -75,7 +77,7 @@ src/
   main.js             entry point
   ai/                 CPU opponent (drives a fighter through the same input object a player uses)
   audio/              synthesized sound: engine + mix, sound effects, music sequencer, announcer
-  core/               game loop (fixed 60 Hz), keyboard + controller input, physics, math helpers
+  core/               game loop (fixed 60 Hz), keyboard + controller + touch input, physics, math helpers
   combat/             attacks, move slots, hitboxes, state machine, hit resolution, projectiles,
                       match.js: one frame of fighting, shared by the game, the tests and the CPU report
   fighters/           Fighter runtime class + one folder per character

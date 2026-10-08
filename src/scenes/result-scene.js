@@ -32,6 +32,10 @@ export class ResultScene {
         return winner === 1 ? 'You beat the CPU!' : `CPU (${CPU_LEVELS[cpu].label}) wins`;
     }
 
+    get touchButtons() {
+        return this.match.online ? { attack: 'LOBBY', exit: 'LEAVE' } : { attack: 'PICK', special: 'AGAIN', exit: 'QUIT' };
+    }
+
     update() {
         this.time++;
         const { input } = this.game;
@@ -75,7 +79,8 @@ export class ResultScene {
         drawText(ctx, this.winnerDef.name.toUpperCase(), width / 2, 490, { size: 80, font: DISPLAY_FONT, weight: 'normal', color: this.winnerDef.color, outline: '#2a1d17', outlineWidth: 9 });
         drawText(ctx, this.winnerLabel, width / 2, 540, { size: 32, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
 
-        const help = this.match.online ? 'J / Enter / ✕: Pick again for a rematch   ·   ESC: Leave the online game' : 'J / Enter / ✕: Character Select   ·   L / Num3 / ○: Rematch   ·   ESC: Title';
+        const touchHelp = this.match.online ? 'LOBBY: Pick again for a rematch   ·   LEAVE: Leave the online game' : 'PICK: Character Select   ·   AGAIN: Rematch   ·   QUIT: Title';
+        const help = this.game.touchActive ? touchHelp : this.match.online ? 'J / Enter / ✕: Pick again for a rematch   ·   ESC: Leave the online game' : 'J / Enter / ✕: Character Select   ·   L / Num3 / ○: Rematch   ·   ESC: Title';
         drawText(ctx, help, width / 2, 640, { size: 24, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 5 });
     }
 }

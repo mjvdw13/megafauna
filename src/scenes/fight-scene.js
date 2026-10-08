@@ -18,6 +18,7 @@
 import { CpuController } from '../ai/cpu-controller.js';
 import { attackSound } from '../audio/sfx.js';
 import { MATCH, SCREEN } from '../config.js';
+import { FIGHT_TOUCH_BUTTONS } from '../core/touch.js';
 import { HitResult } from '../combat/combat-system.js';
 import { Match } from '../combat/match.js';
 import { CharacterStates as S } from '../combat/states.js';
@@ -76,6 +77,8 @@ export class FightScene {
         this.paper = false; // no paper grain over the 3-D picture
         this.view3d = null;
     }
+
+    get touchButtons() { return FIGHT_TOUCH_BUTTONS; }
 
     /**
      * @param cpu     CPU difficulty for player 2, or null for a second human player

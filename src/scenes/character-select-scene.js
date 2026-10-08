@@ -159,7 +159,8 @@ export class CharacterSelectScene {
         drawText(ctx, 'VS', width / 2, 350, { size: 92, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: INK, outlineWidth: 9 });
         this.renderRosterStrip(ctx);
         if (this.reveal > 0) this.renderReveal(ctx);
-        const help = this.vsCpu ? 'A/D choose · J confirm · K cancel · ESC back' : 'A/D or ←/→ choose · J / Num1 confirm · K / Num2 cancel · ESC back';
+        const help = this.game.touchActive ? 'Stick ← / → to choose · OK confirm · BACK cancel'
+            : this.vsCpu ? 'A/D choose · J confirm · K cancel · ESC back' : 'A/D or ←/→ choose · J / Num1 confirm · K / Num2 cancel · ESC back';
         drawText(ctx, help, width / 2, 708, { size: 18, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
     }
 
@@ -198,7 +199,8 @@ export class CharacterSelectScene {
         // Special moves list: special alone, or with a direction
         const top = y + 314 + lines * 19 + 8;
         const specials = [['•', 'neutralSpecial'], ['←→', 'sideSpecial'], ['↑', 'upSpecial'], ['↓', 'downSpecial']];
-        drawText(ctx, `SPECIALS  (${cursor.playerNumber === 1 ? 'L' : 'Num3'} + direction)`, x + 26, top, { size: 16, font: DISPLAY_FONT, weight: 'normal', color: '#8c7a6b', align: 'left' });
+        const specialKey = this.game.touchActive ? 'SPECIAL' : cursor.playerNumber === 1 ? 'L' : 'Num3';
+        drawText(ctx, `SPECIALS  (${specialKey} + direction)`, x + 26, top, { size: 16, font: DISPLAY_FONT, weight: 'normal', color: '#8c7a6b', align: 'left' });
         specials.forEach(([keys, slot], i) => {
             const move = def.moves[slot];
             if (!move) return;

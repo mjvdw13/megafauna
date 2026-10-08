@@ -43,6 +43,15 @@ export class OnlineScene {
         game.audio.music.play('title');
     }
 
+    /** On-screen buttons for each stage of the lobby (see core/touch.js). */
+    get touchButtons() {
+        const session = this.session;
+        if (session.closed || !session.connected) {
+            return session.status === 'waiting' && !session.closed ? { smash: 'CANCEL', share: 'SHARE LINK' } : { smash: 'BACK' };
+        }
+        return this.ready ? { smash: 'CHANGE' } : { attack: 'READY', smash: 'LEAVE' };
+    }
+
     get isHost() { return this.session.role === 'host'; }
     get myPick() { return this.roster[this.pickIndex].id; }
     get stageId() { return STAGES[this.stageIndex].id; }
@@ -106,6 +115,13 @@ export class OnlineScene {
         }
     }
 
+    /** Touch: open the phone's share sheet for the invite (or copy it where there isn't one). Runs inside the tap. */
+    shareLink() {
+        if (this.session?.status !== 'waiting') return;
+        if (!navigator.share) { this.copyLink(); return; }
+        navigator.share({ title: 'MegaFauna', text: 'Fight me in MegaFauna!', url: this.session.inviteUrl }).catch(() => {});
+    }
+
     copyLink() {
         const { game } = this;
         navigator.clipboard.writeText(this.session.inviteUrl).then(
@@ -126,8 +142,9 @@ export class OnlineScene {
         drawText(ctx, 'PLAY ONLINE', width / 2, 70, { size: 64, font: DISPLAY_FONT, weight: 'normal', color: '#fdf3dc', outline: INK, outlineWidth: 8 });
 
         const session = this.session;
-        if (session.closed) this.renderMessage(ctx, session.error || 'Disconnected.', 'ESC or K: back to the title screen');
-        else if (session.status === 'connecting') this.renderMessage(ctx, this.isHost ? 'Creating your invite...' : 'Joining your friend...', 'ESC: cancel');
+        const touch = this.game.touchActive;
+        if (session.closed) this.renderMessage(ctx, session.error || 'Disconnected.', touch ? 'BACK: back to the title screen' : 'ESC or K: back to the title screen');
+        else if (session.status === 'connecting') this.renderMessage(ctx, this.isHost ? 'Creating your invite...' : 'Joining your friend...', touch ? 'BACK: cancel' : 'ESC: cancel');
         else if (session.status === 'waiting') this.renderInvite(ctx);
         else this.renderLobby(ctx);
     }
@@ -145,10 +162,11 @@ export class OnlineScene {
         drawText(ctx, 'Send this link to a friend:', width / 2, 240, { size: 34, color: INK });
         drawText(ctx, this.session.inviteUrl, width / 2, 320, { size: 30, font: 'monospace', color: '#2f80c9' });
         const pulse = 0.6 + 0.4 * Math.sin(this.time * 0.1);
-        drawText(ctx, 'Press C to copy it', width / 2, 400, { size: 40, font: DISPLAY_FONT, weight: 'normal', color: '#f25c3b', outline: INK, outlineWidth: 5 });
+        // With touch controls the SHARE LINK button sits here instead (see core/touch.js).
+        if (!this.game.touchActive) drawText(ctx, 'Press C to copy it', width / 2, 400, { size: 40, font: DISPLAY_FONT, weight: 'normal', color: '#f25c3b', outline: INK, outlineWidth: 5 });
         drawText(ctx, `Waiting for your friend to open it${'.'.repeat(Math.floor(this.time / 20) % 4)}`, width / 2, 530, { size: 28, color: '#fdf3dc', outline: INK, outlineWidth: 5, alpha: pulse });
         drawText(ctx, 'When they join you each pick a fighter. You play on the left; your friend on the right.', width / 2, 590, { size: 20, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
-        drawText(ctx, 'ESC: cancel', width / 2, 690, { size: 20, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
+        drawText(ctx, this.game.touchActive ? 'CANCEL: stop waiting' : 'ESC: cancel', width / 2, 690, { size: 20, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
     }
 
     renderLobby(ctx) {
@@ -165,13 +183,15 @@ export class OnlineScene {
         drawText(ctx, 'VS', width / 2, 300, { size: 92, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: INK, outlineWidth: 9 });
         drawText(ctx, 'STAGE', width / 2, 400, { size: 22, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
         drawText(ctx, stage ? stage.name : '...', width / 2, 440, { size: 32, font: DISPLAY_FONT, weight: 'normal', color: '#f7c948', outline: INK, outlineWidth: 5 });
-        if (this.isHost && !this.ready) drawText(ctx, '▲ W / S ▼', width / 2, 474, { size: 18, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
+        if (this.isHost && !this.ready) drawText(ctx, this.game.touchActive ? '▲ stick ▼' : '▲ W / S ▼', width / 2, 474, { size: 18, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
 
         const ping = session.rtt === null ? '' : `   ·   ping ${Math.round(session.rtt)} ms`;
         drawText(ctx, `Connected${ping}`, width / 2, 600, { size: 22, color: '#bdf5a0', outline: INK, outlineWidth: 4 });
+        const touch = this.game.touchActive;
         const help = this.ready
-            ? (them.ready ? 'Starting...' : 'Waiting for your opponent to be ready · K / ESC: change your pick')
-            : `A/D or ←/→ choose · J confirm${this.isHost ? ' · W/S stage' : ''} · ESC leave`;
+            ? (them.ready ? 'Starting...' : `Waiting for your opponent to be ready · ${touch ? 'CHANGE' : 'K / ESC'}: change your pick`)
+            : touch ? `Stick ← / → choose${this.isHost ? ' · ↑ / ↓ stage' : ''} · READY when set · LEAVE to quit`
+                : `A/D or ←/→ choose · J confirm${this.isHost ? ' · W/S stage' : ''} · ESC leave`;
         drawText(ctx, help, width / 2, 690, { size: 20, color: '#fdf3dc', outline: INK, outlineWidth: 4 });
     }
 

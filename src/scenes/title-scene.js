@@ -46,6 +46,8 @@ export class TitleScene {
         this.game.audio.music.play('title');
     }
 
+    get touchButtons() { return { attack: 'OK' }; }
+
     exit() {
         for (const actor of this.actors) this.world.scene.remove(actor.holder);
         this.actors = [];
@@ -101,6 +103,12 @@ export class TitleScene {
 
         this.renderMenu(ctx);
         const hint = { size: 16, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 };
+        if (this.game.touchActive) {
+            const big = { ...hint, size: 20 };
+            drawText(ctx, 'Left thumb: move · push up to jump · flick sideways to run', width / 2, 652, big);
+            drawText(ctx, 'Hold a direction to change any move · hold SMASH to charge · GRAB throws through shields', width / 2, 682, big);
+            return;
+        }
         drawText(ctx, 'P1: WASD move · W or Space jump · J attack · K smash · L special · ; shield', width / 2, 642, hint);
         drawText(ctx, 'P2: Arrows move · ↑ or Num5 jump · Num1 attack · Num2 smash · Num3 special · Num0 shield   (laptop: , . / RShift)', width / 2, 663, hint);
         drawText(ctx, 'Controller: ✕ jump · □ attack · △ smash · ○ special · R1 shield · L1 grab · right stick = smash attacks', width / 2, 684, hint);
@@ -130,6 +138,7 @@ export class TitleScene {
             ctx.restore();
             if (selected) drawText(ctx, '▶', cx - 205, y, { size: 28, color: '#f25c3b', outline: '#2a1d17', outlineWidth: 4 });
         });
-        drawText(ctx, 'W/S or ↑/↓ choose   ·   ENTER, J or ✕ to start', cx, MENU_TOP + MENU.length * ROW_HEIGHT + 20, { size: 19, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
+        const help = this.game.touchActive ? 'Stick up / down to choose   ·   OK to start' : 'W/S or ↑/↓ choose   ·   ENTER, J or ✕ to start';
+        drawText(ctx, help, cx, MENU_TOP + MENU.length * ROW_HEIGHT + 20, { size: 19, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
     }
 }

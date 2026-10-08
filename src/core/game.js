@@ -24,6 +24,7 @@ import { TitleScene } from '../scenes/title-scene.js';
 import { STAGES } from '../stages/index.js';
 import { drawText, DISPLAY_FONT } from '../ui/text.js';
 import { InputHandler } from './input.js';
+import { isTouchDevice, MENU_TOUCH_BUTTONS, TouchControls } from './touch.js';
 
 const TOAST_FRAMES = 90;
 
@@ -42,8 +43,16 @@ export class Game {
         // mode: 'cpu' (P1 vs the computer) or 'versus' (two players). cpuLevel: a key of CPU_LEVELS.
         this.session = { mode: 'cpu', cpuLevel: CPU_LEVEL_IDS[1], p1: ROSTER[0].id, p2: ROSTER[1 % ROSTER.length].id, stage: STAGES[0].id };
         this.online = null; // the OnlineSession while playing a friend over the internet
-        this.debug = new URLSearchParams(window.location.search).has('debug');
+        const params = new URLSearchParams(window.location.search);
+        this.debug = params.has('debug');
         window.addEventListener('keydown', (e) => { if (e.code === 'Backquote') this.debug = !this.debug; });
+
+        // On-screen controls: shown on phones and tablets, or once the screen is touched.
+        // ?touch=1 forces them on (handy for trying them on a desktop), ?touch=0 off.
+        this.touchMode = params.get('touch');
+        this.touchSeen = isTouchDevice();
+        window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.touchSeen = true; }, true);
+        this.touch = new TouchControls(document.body, this.input.touch, { onShare: () => this.scene?.shareLink?.() });
 
         this.scenes = {
             title: new TitleScene(this),
@@ -86,6 +95,11 @@ export class Game {
         ctx.fillStyle = '#f7c948';
         ctx.fillRect(width / 2 - 248, height / 2 + 22, 496 * progress, 20);
         drawText(ctx, `${label}...`, width / 2, height / 2 + 84, { size: 24, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
+    }
+
+    /** True while the on-screen touch controls are showing; scenes use it to swap key hints for touch ones. */
+    get touchActive() {
+        return this.touchMode === '1' || (this.touchMode !== '0' && this.touchSeen);
     }
 
     changeScene(name, params = {}) {
@@ -143,6 +157,8 @@ export class Game {
     }
 
     render() {
+        this.touch.setVisible(this.touchActive);
+        if (this.touchActive) this.touch.setLayout(this.scene.touchButtons ?? MENU_TOUCH_BUTTONS);
         this.ctx.fillStyle = '#16213e';
         this.ctx.fillRect(0, 0, SCREEN.width, SCREEN.height);
         this.scene.render(this.ctx);

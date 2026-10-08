@@ -94,7 +94,8 @@ export class StageSelectScene {
         });
 
         this.renderGrid(ctx);
-        drawText(ctx, 'Arrows / WASD choose · J / Enter fight · K / ESC back', width / 2, 706, { size: 19, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
+        const help = this.game.touchActive ? 'Stick to choose · OK to fight · BACK to go back' : 'Arrows / WASD choose · J / Enter fight · K / ESC back';
+        drawText(ctx, help, width / 2, 706, { size: 19, color: '#fdf3dc', outline: '#2a1d17', outlineWidth: 4 });
     }
 
     renderGrid(ctx) {

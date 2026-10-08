@@ -1,7 +1,8 @@
 // ============================================================================
 // INPUT HANDLER
-// Polls keyboard state (and any game controllers, see gamepad.js) once per
-// simulation step and exposes held/pressed flags per player. Key bindings come
+// Polls keyboard state (and any game controllers, see gamepad.js, and the
+// on-screen touch controls for player 1, see touch.js) once per simulation
+// step and exposes held/pressed flags per player. Key bindings come
 // from CONTROLS in config.js.
 //
 // Menus read `confirmPressed` / `cancelPressed` rather than fight buttons:
@@ -14,6 +15,7 @@
 // ============================================================================
 import { CONTROLS, INPUT_TIMING } from '../config.js';
 import { GamepadReader } from './gamepad.js';
+import { TouchPad } from './touch.js';
 
 export const PLAYER_ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'smash', 'special', 'shield'];
 const NEVER = 999;
@@ -49,8 +51,7 @@ class GestureTracker {
     apply(input) {
         this.frame++;
 
-        // Double-tap to dash
-        input.dash = 0;
+        // Double-tap to dash (a flick of the touch stick may already have started one)
         for (const [dir, sign] of [['left', -1], ['right', 1]]) {
             if (!input[`${dir}Pressed`]) continue;
             if (this.frame - this.lastTap[dir] <= INPUT_TIMING.doubleTap) { input.dash = sign; this.lastTap[dir] = -NEVER; }
@@ -70,9 +71,10 @@ class GestureTracker {
 }
 
 export class InputHandler {
-    constructor(target = window, controls = CONTROLS, gamepads = new GamepadReader()) {
+    constructor(target = window, controls = CONTROLS, gamepads = new GamepadReader(), touch = new TouchPad()) {
         this.controls = controls;
         this.gamepads = gamepads;
+        this.touch = touch;
         this.keys = new Map();
         this.previousKeys = new Map();
         // Keys pressed since the last poll, so a tap shorter than one frame still registers.
@@ -106,7 +108,9 @@ export class InputHandler {
         }
         input.confirmPressed = input.attackPressed;
         input.cancelPressed = input.smashPressed;
+        input.dash = 0;
         this.gamepads.applyTo(input, playerNumber);
+        if (playerNumber === 1) this.touch.applyTo(input);
         gestures.apply(input);
     }
 
@@ -114,8 +118,8 @@ export class InputHandler {
         this.updatePlayer(this.player1, 1, this.controls.p1, this.gestures[0]);
         this.updatePlayer(this.player2, 2, this.controls.p2, this.gestures[1]);
         this.menu.confirm = this.isPressed(this.controls.menu.confirm);
-        this.menu.back = this.isPressed(this.controls.menu.back);
-        this.menu.mute = this.isPressed(this.controls.menu.mute);
+        this.menu.back = this.isPressed(this.controls.menu.back) || this.touch.takeMenu('back');
+        this.menu.mute = this.isPressed(this.controls.menu.mute) || this.touch.takeMenu('mute');
         this.menu.copy = this.isPressed(this.controls.menu.copy);
         // Snapshot AFTER evaluating presses so "pressed" is true for exactly one step.
         this.previousKeys = new Map(this.keys);

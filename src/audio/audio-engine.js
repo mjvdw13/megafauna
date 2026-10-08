@@ -37,6 +37,9 @@ export class AudioEngine {
         const unlock = () => this.unlock();
         target.addEventListener('keydown', unlock);
         target.addEventListener('pointerdown', unlock);
+        // Phones only count the end of a touch as a gesture that may start sound.
+        target.addEventListener('pointerup', unlock);
+        target.addEventListener('touchend', unlock);
     }
 
     /** True once sound can actually be heard. */
